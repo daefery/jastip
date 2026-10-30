@@ -1,8 +1,12 @@
-import { readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+// Config from Cloudflare bindings (deployed) or process.env (Node dev). One getter for both.
+const store = {};
+export const setEnv = (obj) => { for (const [k, v] of Object.entries(obj || {})) if (typeof v === "string") store[k] = v; };
+export const env = (k) => store[k] ?? (typeof process !== "undefined" ? process.env?.[k] : undefined);
 
-// Loads .env from the app folder, then from the project root (one level up).
-export function loadEnv(dir) {
+// Node only: read .env from the app folder, then from the project root.
+export async function loadDotEnv(dir) {
+  const { readFileSync, existsSync } = await import("node:fs");
+  const { join } = await import("node:path");
   for (const p of [join(dir, ".env"), join(dir, "..", ".env")]) {
     if (!existsSync(p)) continue;
     for (const line of readFileSync(p, "utf8").split("\n")) {

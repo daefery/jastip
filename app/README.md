@@ -5,7 +5,12 @@ their max price. The traveller photographs **one receipt**; AI reads it and code
 their **exact line plus fee**. Items not found are **released**. Charges go straight to the
 traveller's PayPal account, so the app never holds anyone's money.
 
-## Run
+## Live
+
+**https://jastip.feryyp-work.workers.dev** (Cloudflare Workers + D1 + Workers AI, PayPal sandbox).
+Test buyer: any PayPal sandbox *personal* account.
+
+## Run locally
 
 Node 22.5 or newer. No dependencies.
 
@@ -14,9 +19,20 @@ cp ../.env.example ../.env     # PayPal sandbox app keys + an OpenAI-compatible 
 npm start                      # http://localhost:5180
 ```
 
-`.env` keys: `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` (sandbox), `AI_BASE_URL`, `AI_API_KEY`,
-`AI_MODEL` (a vision model; `gemini-3.8-flash-high` scored 20/20 on our synthetic receipt set),
-optional `PUBLIC_URL` when hosted.
+`.env` keys: `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` (sandbox), `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL`.
+
+## Deploy to Cloudflare
+
+```sh
+npx wrangler d1 create jastip                  # put the id in wrangler.jsonc
+npx wrangler d1 migrations apply jastip --remote
+npx wrangler secret put PAYPAL_CLIENT_ID
+npx wrangler secret put PAYPAL_CLIENT_SECRET
+npx wrangler deploy
+```
+
+Same code runs in both places: `lib/api.mjs` is a fetch handler; `worker.mjs` gives it D1 and the
+Workers AI binding, `server.mjs` gives it `node:sqlite` and an OpenAI-compatible endpoint.
 
 ## Try it on one device
 
@@ -45,6 +61,11 @@ so the app asks for holds on the shopping day and charges at the receipt, inside
 
 ## AI
 
+Deployed: Cloudflare Workers AI, `@cf/google/gemma-4-26b-a4b-it`, thinking off, JSON output.
+On our 5 synthetic receipts (20 requests) it scored 19/20 three times with thinking off
+(the miss: a silicone strainer taken for a "silicone container"), about 10 s per receipt.
+On the live site one full receipt read took 11.6 s. Locally we used Gemini 3.8 Flash (20/20, 8-22 s).
+
 - **Request:** turns a pasted link or slang into an item name, variant and a rough shelf price.
 - **Receipt:** reads every line (Japanese, Indonesian, English), keeps discount lines separate,
   and picks which line answers which request. Code then folds discounts into the item above,
@@ -71,7 +92,8 @@ and hosted multi-user sign-in (names only, cookie session).
 
 ## Tests
 
-Last full run, 30 Oct 2026, real PayPal sandbox + real AI (`npm test`): **29/29 passed**.
+Last full runs, 30 Oct 2026, real PayPal sandbox + real AI (`npm test`): **29/29 passed** locally,
+and **29/29 passed** on the live Cloudflare deployment (`BASE=https://jastip.feryyp-work.workers.dev npm test`).
 Checked afterwards directly against PayPal's API (not our database):
 
 | Request | Hold | PayPal authorization | Capture |

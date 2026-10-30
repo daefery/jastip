@@ -1,0 +1,27 @@
+{
+  "model": "@cf/moonshotai/kimi-k2.6",
+  "right": 0,
+  "total": 20,
+  "results": [
+    {
+      "case": "s1-donki-tax-incl.json",
+      "err": "Error: 403 {\"errors\":[{\"message\":\"AiError: Model @cf/moonshotai/kimi-k2.6 is not available on the Workers Free plan: Model @cf/moonshotai/kimi-k2.6 is not available on the Workers Free plan. Upgrade to access this model: https://dash.cloudflare.com/?to=/:account/workers/plans (5be9d186-5cc4-400f-8021-0ff2c3d6d"
+    },
+    {
+      "case": "s2-drugstore-discount.json",
+      "err": "Error: 403 {\"errors\":[{\"message\":\"AiError: Model @cf/moonshotai/kimi-k2.6 is not available on the Workers Free plan: Model @cf/moonshotai/kimi-k2.6 is not available on the Workers Free plan. Upgrade to access this model: https://dash.cloudflare.com/?to=/:account/workers/plans (a1613bb5-9cb4-4786-9808-0c7a3083e"
+    },
+    {
+      "case": "s3-daiso-decoys.json",
+      "err": "Error: 403 {\"errors\":[{\"message\":\"AiError: Model @cf/moonshotai/kimi-k2.6 is not available on the Workers Free plan: Model @cf/moonshotai/kimi-k2.6 is not available on the Workers Free plan. Upgrade to access this model: https://dash.cloudflare.com/?to=/:account/workers/plans (c1fa7077-20e8-476e-a921-9b460cd17"
+    },
+    {
+      "case": "s4-konbini-tax-excl.json",
+      "err": "Error: 403 {\"errors\":[{\"message\":\"AiError: Model @cf/moonshotai/kimi-k2.6 is not available on the Workers Free plan: Model @cf/moonshotai/kimi-k2.6 is not available on the Workers Free plan. Upgrade to access this model: https://dash.cloudflare.com/?to=/:account/workers/plans (401ede98-fb4f-443e-9d7c-a4a38991c"
+    },
+    {
+      "case": "s5-indonesia-watsons.json",
+      "err": "Error: 403 {\"errors\":[{\"message\":\"AiError: Model @cf/moonshotai/kimi-k2.6 is not available on the Workers Free plan: Model @cf/moonshotai/kimi-k2.6 is not available on the Workers Free plan. Upgrade to access this model: https://dash.cloudflare.com/?to=/:account/workers/plans (4013fb96-0c08-4ecb-b7c9-6362a7507"
+    }
+  ]
+}

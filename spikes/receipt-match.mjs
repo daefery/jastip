@@ -55,6 +55,7 @@ async function ask(imagePath, requests) {
     body: JSON.stringify({
       model: MODEL,
       temperature: 0,
+      ...(process.env.AI_NO_THINK ? { chat_template_kwargs: { enable_thinking: false }, response_format: { type: "json_object" }, max_completion_tokens: 2000 } : {}),
       messages: [
         { role: "system", content: SYSTEM },
         { role: "user", content: [

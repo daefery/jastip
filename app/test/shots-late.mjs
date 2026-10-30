@@ -50,7 +50,7 @@ await bima.click('[data-swap][data-y="1"]'); await bima.waitForTimeout(900);
 await dina.reload(); await dina.waitForSelector("[data-receipt]:not([disabled])"); await shot(dina, "ready-receipt");
 await dina.click("[data-receipt]"); await shot(dina, "receipt-sheet");
 await dina.click("#rx-sample"); await dina.waitForTimeout(1500); await shot(dina, "receipt-reading");
-await dina.waitForSelector("#rx-go", { timeout: 90000 }); await shot(dina, "receipt-plan");
+const t0 = Date.now(); await dina.waitForSelector("#rx-go", { timeout: 120000 }); console.log("receipt read ms", Date.now() - t0); await shot(dina, "receipt-plan");
 await dina.evaluate(() => document.querySelector(".sheet .sh-b").scrollTo(0, 9999)); await shot(dina, "receipt-plan-bottom");
 await dina.click("#rx-go"); await dina.waitForSelector(".money", { timeout: 30000 }); await shot(dina, "settled");
 

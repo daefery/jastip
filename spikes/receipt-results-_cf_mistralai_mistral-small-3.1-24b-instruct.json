@@ -1,0 +1,27 @@
+{
+  "model": "@cf/mistralai/mistral-small-3.1-24b-instruct",
+  "right": 0,
+  "total": 20,
+  "results": [
+    {
+      "case": "s1-donki-tax-incl.json",
+      "err": "SyntaxError: Expected ',' or '}' after property value in JSON at position 403 (line 10 column 41)"
+    },
+    {
+      "case": "s2-drugstore-discount.json",
+      "err": "SyntaxError: Expected ',' or '}' after property value in JSON at position 406 (line 10 column 42)"
+    },
+    {
+      "case": "s3-daiso-decoys.json",
+      "err": "SyntaxError: Expected ',' or ']' after array element in JSON at position 515 (line 14 column 79)"
+    },
+    {
+      "case": "s4-konbini-tax-excl.json",
+      "err": "SyntaxError: Expected ',' or ']' after array element in JSON at position 502 (line 13 column 85)"
+    },
+    {
+      "case": "s5-indonesia-watsons.json",
+      "err": "SyntaxError: Expected ',' or '}' after property value in JSON at position 460 (line 10 column 45)"
+    }
+  ]
+}

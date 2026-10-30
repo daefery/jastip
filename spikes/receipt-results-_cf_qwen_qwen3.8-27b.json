@@ -1,0 +1,447 @@
+{
+  "model": "@cf/qwen/qwen3.8-27b",
+  "right": 12,
+  "total": 20,
+  "results": [
+    {
+      "case": "s1-donki-tax-incl.json",
+      "err": "Error: 408 {\"errors\":[{\"message\":\"AiError: AiError: Request timeout (ff71bb73-3697-4f92-a7e6-6941594b7c80)\",\"code\":3046}],\"success\":false,\"result\":{},\"messages\":[]}"
+    },
+    {
+      "case": "s2-drugstore-discount.json",
+      "model": "@cf/qwen/qwen3.8-27b",
+      "ms": 22817,
+      "rows": [
+        {
+          "id": "r1",
+          "want": "Biore UV Aqua Rich sunscreen",
+          "expected": 970,
+          "got": 970,
+          "line": "ビオレUV アクアリッチ エッセンス 70g",
+          "share": 970,
+          "ok": true,
+          "why": "Biore UV Aqua Rich essence 70g matches Biore UV Aqua Rich sunscreen"
+        },
+        {
+          "id": "r2",
+          "want": "Curel face cream",
+          "expected": 2680,
+          "got": 2680,
+          "line": "キュレル 潤浸保湿 フェイスクリーム 40g",
+          "share": 2680,
+          "ok": true,
+          "why": "Curel moisturizing face cream 40g matches Curel face cream"
+        },
+        {
+          "id": "r3",
+          "want": "Salonpas 140 sheets",
+          "expected": 1680,
+          "got": 1680,
+          "line": "サロンパス 140枚",
+          "share": 1680,
+          "ok": true,
+          "why": "Salonpas 140 sheets matches Salonpas 140枚"
+        },
+        {
+          "id": "r4",
+          "want": "Muhi itch cream",
+          "expected": null,
+          "got": null,
+          "line": null,
+          "share": null,
+          "ok": true,
+          "why": "No Muhi on receipt; line 5 is Eve A tablets, not Muhi"
+        }
+      ],
+      "read": {
+        "currency": "JPY",
+        "lines": [
+          {
+            "n": 1,
+            "text": "ビオレUV アクアリッチ エッセンス 70g",
+            "qty": 1,
+            "price": 970,
+            "discounts": [
+              "値引 -10%"
+            ]
+          },
+          {
+            "n": 3,
+            "text": "キュレル 潤浸保湿 フェイスクリーム 40g",
+            "qty": 1,
+            "price": 2680
+          },
+          {
+            "n": 4,
+            "text": "サロンパス 140枚",
+            "qty": 1,
+            "price": 1680
+          },
+          {
+            "n": 5,
+            "text": "イブA錠 60錠",
+            "qty": 1,
+            "price": 1650
+          }
+        ],
+        "tax": {
+          "included": false,
+          "amount": 0
+        },
+        "total": 6345,
+        "tax_free": true,
+        "matches": [
+          {
+            "request_id": "r1",
+            "line_n": 1,
+            "confidence": 0.95,
+            "why": "Biore UV Aqua Rich essence 70g matches Biore UV Aqua Rich sunscreen"
+          },
+          {
+            "request_id": "r2",
+            "line_n": 3,
+            "confidence": 0.95,
+            "why": "Curel moisturizing face cream 40g matches Curel face cream"
+          },
+          {
+            "request_id": "r3",
+            "line_n": 4,
+            "confidence": 0.98,
+            "why": "Salonpas 140 sheets matches Salonpas 140枚"
+          },
+          {
+            "request_id": "r4",
+            "line_n": null,
+            "confidence": 0,
+            "why": "No Muhi on receipt; line 5 is Eve A tablets, not Muhi"
+          }
+        ],
+        "rawLines": [
+          {
+            "n": 1,
+            "text": "ビオレUV アクアリッチ エッセンス 70g",
+            "qty": 1,
+            "price": 1078
+          },
+          {
+            "n": 2,
+            "text": "値引 -10%",
+            "qty": 1,
+            "price": -108
+          },
+          {
+            "n": 3,
+            "text": "キュレル 潤浸保湿 フェイスクリーム 40g",
+            "qty": 1,
+            "price": 2680
+          },
+          {
+            "n": 4,
+            "text": "サロンパス 140枚",
+            "qty": 1,
+            "price": 1680
+          },
+          {
+            "n": 5,
+            "text": "イブA錠 60錠",
+            "qty": 1,
+            "price": 1650
+          }
+        ]
+      }
+    },
+    {
+      "case": "s3-daiso-decoys.json",
+      "model": "@cf/qwen/qwen3.8-27b",
+      "ms": 34356,
+      "rows": [
+        {
+          "id": "r1",
+          "want": "makeup brush set",
+          "expected": 220,
+          "got": 220,
+          "line": "メイクブラシ セット",
+          "share": 220,
+          "ok": true,
+          "why": "メイクブラシ セット = makeup brush set"
+        },
+        {
+          "id": "r2",
+          "want": "makeup sponges",
+          "expected": 110,
+          "got": 110,
+          "line": "メイクスポンジ 6P",
+          "share": 110,
+          "ok": true,
+          "why": "メイクスポンジ 6P = makeup sponges"
+        },
+        {
+          "id": "r3",
+          "want": "brush cleaner",
+          "expected": 330,
+          "got": 330,
+          "line": "ブラシクリーナー",
+          "share": 330,
+          "ok": true,
+          "why": "ブラシクリーナー = brush cleaner"
+        },
+        {
+          "id": "r4",
+          "want": "silicone food container",
+          "expected": null,
+          "got": null,
+          "line": null,
+          "share": null,
+          "ok": true,
+          "why": "only silicone strainer present, not a food container"
+        }
+      ],
+      "read": {
+        "currency": "JPY",
+        "lines": [
+          {
+            "n": 1,
+            "text": "シリコン ストレナー",
+            "qty": 1,
+            "price": 110
+          },
+          {
+            "n": 2,
+            "text": "メイクブラシ セット",
+            "qty": 1,
+            "price": 220
+          },
+          {
+            "n": 3,
+            "text": "メイクスポンジ 6P",
+            "qty": 1,
+            "price": 110
+          },
+          {
+            "n": 4,
+            "text": "ブラシクリーナー",
+            "qty": 1,
+            "price": 330
+          },
+          {
+            "n": 5,
+            "text": "アイプチ ヘアクリップ",
+            "qty": 1,
+            "price": 110
+          }
+        ],
+        "tax": {
+          "included": false,
+          "amount": 0
+        },
+        "total": 880,
+        "tax_free": false,
+        "matches": [
+          {
+            "request_id": "r1",
+            "line_n": 2,
+            "confidence": 0.95,
+            "why": "メイクブラシ セット = makeup brush set"
+          },
+          {
+            "request_id": "r2",
+            "line_n": 3,
+            "confidence": 0.95,
+            "why": "メイクスポンジ 6P = makeup sponges"
+          },
+          {
+            "request_id": "r3",
+            "line_n": 4,
+            "confidence": 0.95,
+            "why": "ブラシクリーナー = brush cleaner"
+          },
+          {
+            "request_id": "r4",
+            "line_n": null,
+            "confidence": 0.2,
+            "why": "only silicone strainer present, not a food container"
+          }
+        ],
+        "rawLines": [
+          {
+            "n": 1,
+            "text": "シリコン ストレナー",
+            "qty": 1,
+            "price": 110
+          },
+          {
+            "n": 2,
+            "text": "メイクブラシ セット",
+            "qty": 1,
+            "price": 220
+          },
+          {
+            "n": 3,
+            "text": "メイクスポンジ 6P",
+            "qty": 1,
+            "price": 110
+          },
+          {
+            "n": 4,
+            "text": "ブラシクリーナー",
+            "qty": 1,
+            "price": 330
+          },
+          {
+            "n": 5,
+            "text": "アイプチ ヘアクリップ",
+            "qty": 1,
+            "price": 110
+          }
+        ]
+      }
+    },
+    {
+      "case": "s4-konbini-tax-excl.json",
+      "err": "Error: 408 {\"errors\":[{\"message\":\"AiError: AiError: Request timeout (cb9eba24-da91-46ff-8fe8-5b161905f908)\",\"code\":3046}],\"success\":false,\"result\":{},\"messages\":[]}"
+    },
+    {
+      "case": "s5-indonesia-watsons.json",
+      "model": "@cf/qwen/qwen3.8-27b",
+      "ms": 18415,
+      "rows": [
+        {
+          "id": "r1",
+          "want": "Skintific ceramide moisturizer",
+          "expected": 139000,
+          "got": 139000,
+          "line": "SKINTIFIC 5X CERAMIDE MOIST 30G",
+          "share": 139000,
+          "ok": true,
+          "why": "Skintific 5X Ceramide Moist matches ceramide moisturizer"
+        },
+        {
+          "id": "r2",
+          "want": "Wardah sunscreen SPF 50",
+          "expected": 47500,
+          "got": 47500,
+          "line": "WARDAH UV SHIELD SPF50 40ML",
+          "share": 47500,
+          "ok": true,
+          "why": "Wardah UV Shield SPF50 matches Wardah sunscreen SPF 50"
+        },
+        {
+          "id": "r3",
+          "want": "Somethinc niacinamide serum",
+          "expected": 103500,
+          "got": 103500,
+          "line": "SOMETHINC NIACINAMIDE SRM 20ML",
+          "share": 103500,
+          "ok": true,
+          "why": "Somethinc Niacinamide SRM matches niacinamide serum"
+        },
+        {
+          "id": "r4",
+          "want": "Emina bright stuff face wash",
+          "expected": null,
+          "got": null,
+          "line": null,
+          "share": null,
+          "ok": true,
+          "why": "No Emina face wash on receipt"
+        }
+      ],
+      "read": {
+        "currency": "IDR",
+        "lines": [
+          {
+            "n": 1,
+            "text": "SKINTIFIC 5X CERAMIDE MOIST 30G",
+            "qty": 1,
+            "price": 139000
+          },
+          {
+            "n": 2,
+            "text": "WARDAH UV SHIELD SPF50 40ML",
+            "qty": 1,
+            "price": 47500
+          },
+          {
+            "n": 3,
+            "text": "SOMETHINC NIACINAMIDE SRM 20ML",
+            "qty": 1,
+            "price": 103500,
+            "discounts": [
+              "DISC MEMBER"
+            ]
+          },
+          {
+            "n": 5,
+            "text": "KANTONG BELANJA",
+            "qty": 1,
+            "price": 2000
+          }
+        ],
+        "tax": {
+          "included": true,
+          "amount": 28935
+        },
+        "total": 292000,
+        "tax_free": false,
+        "matches": [
+          {
+            "request_id": "r1",
+            "line_n": 1,
+            "confidence": 0.97,
+            "why": "Skintific 5X Ceramide Moist matches ceramide moisturizer"
+          },
+          {
+            "request_id": "r2",
+            "line_n": 2,
+            "confidence": 0.95,
+            "why": "Wardah UV Shield SPF50 matches Wardah sunscreen SPF 50"
+          },
+          {
+            "request_id": "r3",
+            "line_n": 3,
+            "confidence": 0.95,
+            "why": "Somethinc Niacinamide SRM matches niacinamide serum"
+          },
+          {
+            "request_id": "r4",
+            "line_n": null,
+            "confidence": 0,
+            "why": "No Emina face wash on receipt"
+          }
+        ],
+        "rawLines": [
+          {
+            "n": 1,
+            "text": "SKINTIFIC 5X CERAMIDE MOIST 30G",
+            "qty": 1,
+            "price": 139000
+          },
+          {
+            "n": 2,
+            "text": "WARDAH UV SHIELD SPF50 40ML",
+            "qty": 1,
+            "price": 47500
+          },
+          {
+            "n": 3,
+            "text": "SOMETHINC NIACINAMIDE SRM 20ML",
+            "qty": 1,
+            "price": 115000
+          },
+          {
+            "n": 4,
+            "text": "DISC MEMBER",
+            "qty": 1,
+            "price": -11500
+          },
+          {
+            "n": 5,
+            "text": "KANTONG BELANJA",
+            "qty": 1,
+            "price": 2000
+          }
+        ]
+      }
+    }
+  ]
+}

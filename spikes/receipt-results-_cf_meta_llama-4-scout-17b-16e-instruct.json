@@ -1,0 +1,129 @@
+{
+  "model": "@cf/meta/llama-4-scout-17b-16e-instruct",
+  "right": 3,
+  "total": 20,
+  "results": [
+    {
+      "case": "s1-donki-tax-incl.json",
+      "err": "SyntaxError: Expected ',' or '}' after property value in JSON at position 404 (line 10 column 43)"
+    },
+    {
+      "case": "s2-drugstore-discount.json",
+      "err": "SyntaxError: Expected ',' or ']' after array element in JSON at position 569 (line 14 column 76)"
+    },
+    {
+      "case": "s3-daiso-decoys.json",
+      "err": "SyntaxError: Expected ',' or ']' after array element in JSON at position 543 (line 14 column 108)"
+    },
+    {
+      "case": "s4-konbini-tax-excl.json",
+      "model": "@cf/meta/llama-4-scout-17b-16e-instruct",
+      "ms": 7160,
+      "rows": [
+        {
+          "id": "r1",
+          "want": "Royce nama chocolate original",
+          "expected": 800,
+          "got": 800,
+          "line": "ロイズ 生チョコレート オーレ",
+          "share": 864,
+          "ok": true,
+          "why": "Royce chocolate"
+        },
+        {
+          "id": "r2",
+          "want": "Shiroi Koibito 12",
+          "expected": 1100,
+          "got": 1100,
+          "line": "白い恋人 12枚",
+          "share": 1188,
+          "ok": true,
+          "why": "Shiroi Koibito"
+        },
+        {
+          "id": "r3",
+          "want": "Jagarico salad x2",
+          "expected": 300,
+          "got": 300,
+          "line": "ジャガリコ サラダ 2個 × ¥150",
+          "share": 324,
+          "ok": true,
+          "why": "Jagarico salad"
+        }
+      ],
+      "read": {
+        "currency": "JPY",
+        "lines": [
+          {
+            "n": 1,
+            "text": "ロイズ 生チョコレート オーレ",
+            "qty": 1,
+            "price": 800
+          },
+          {
+            "n": 2,
+            "text": "白い恋人 12枚",
+            "qty": 1,
+            "price": 1100
+          },
+          {
+            "n": 3,
+            "text": "ジャガリコ サラダ 2個 × ¥150",
+            "qty": 1,
+            "price": 300
+          }
+        ],
+        "tax": {
+          "included": false,
+          "amount": 176
+        },
+        "total": 2376,
+        "tax_free": false,
+        "matches": [
+          {
+            "request_id": "r1",
+            "line_n": 1,
+            "confidence": 0.9,
+            "why": "Royce chocolate"
+          },
+          {
+            "request_id": "r2",
+            "line_n": 2,
+            "confidence": 0.9,
+            "why": "Shiroi Koibito"
+          },
+          {
+            "request_id": "r3",
+            "line_n": 3,
+            "confidence": 0.8,
+            "why": "Jagarico salad"
+          }
+        ],
+        "rawLines": [
+          {
+            "n": 1,
+            "text": "ロイズ 生チョコレート オーレ",
+            "qty": 1,
+            "price": 800
+          },
+          {
+            "n": 2,
+            "text": "白い恋人 12枚",
+            "qty": 1,
+            "price": 1100
+          },
+          {
+            "n": 3,
+            "text": "ジャガリコ サラダ 2個 × ¥150",
+            "qty": 1,
+            "price": 300
+          }
+        ]
+      }
+    },
+    {
+      "case": "s5-indonesia-watsons.json",
+      "err": "SyntaxError: Expected ',' or '}' after property value in JSON at position 460 (line 10 column 45)"
+    }
+  ]
+}
