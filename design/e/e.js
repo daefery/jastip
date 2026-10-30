@@ -112,10 +112,27 @@ function friendView(me) {
       <div class="courier">${av("dina", 48)}<div><b>Dina</b><span>Your jastiper · Tokyo · 2 handovers kept</span></div><div class="acts"><button class="circ" aria-label="Chat with Dina">${ic("chat")}</button></div></div>
       <div class="item"><div class="pic ${swapped ? "g-sweet" : r.g}">${ic(r.art)}</div><div><b>${title}</b><span>${swapped ? "Swap · within your max" : r.d} · max ${Y(r.cap)}</span>${at("paid") ? `<div class="rl">${r.line}</div>` : ""}</div>
         <div class="a">${at("paid") ? `<b class="num">${Y(r.price)}</b><span>+ ${Y(FEE)} fee</span>` : `<b class="num">${Y(r.cap)}</b><span>max</span>`}</div></div>
-      <div class="sec">Timeline</div><div class="timeline">${tl}</div>
+      <div class="sec tl-h">Timeline</div><div class="timeline">${tl}</div>
     </div></div>
     ${action ? `<div class="actbar">${action}</div>` : ""}
+    ${friendRail(me)}
+    <aside class="aside" aria-label="Money and timeline">
+      <div class="card"><h3>Your money · PayPal</h3><div class="money"><div class="row"><b class="num">${mt}</b><span class="pp-chip">Pay<i>Pal</i></span></div>${mb}<div class="legend"><span>${ms}</span></div></div></div>
+      <div class="card"><h3>Timeline</h3><div class="timeline">${tl}</div></div>
+    </aside>
     ${sheetHTML()}</div>`;
+}
+
+// expanded only: "your orders" rail for a friend (this trip + an earlier one)
+function friendRail(me) {
+  const mine = Object.keys(REQ).filter((x) => REQ[x].who === me);
+  const st = (x) => (at("delivered") && x === "ayu" ? ["Delivered", "#05a357"] : at("paid") ? (x === "citra2" ? ["Released", "#a8a8a8"] : ["Paid", "#05a357"]) : at("shopping") ? ["Shopping", "#ff7a00"] : at("held") || (now("approve") && me !== "ayu") ? ["Held", "#276ef1"] : ["Asked", "#a8a8a8"]);
+  const rows = mine.map((x, i) => { const [l, c] = st(x); return `<button class="ord" aria-current="${i === 0}"><div class="pic ${REQ[x].g}">${ic(REQ[x].art)}</div><div><b>${me === "bima" && at("till") ? REQ.bima.swap : REQ[x].title}</b><span><i class="dotst" style="background:${c}"></i>${l}</span></div></button>`; }).join("");
+  return `<nav class="rail" aria-label="Your orders"><div class="card">
+    <div class="who">${av(me, 40)}<div><b>${PEOPLE[me].n}</b><span>Your orders</span></div></div>
+    <h3>Dina · Tokyo</h3>${rows}
+    <h3 style="margin-top:16px">Earlier</h3><button class="ord"><div class="pic g-med">${ic("med")}</div><div><b>Rani · Seoul</b><span><i class="dotst" style="background:#05a357"></i>Delivered · Sep</span></div></button>
+  </div></nav>`;
 }
 
 /* ---------- traveller: courier mode ---------- */
@@ -154,7 +171,27 @@ function dinaView() {
       ${steps()}${kp}
       <div class="job">${groups}</div>
     </div></div>
-    ${action ? `<div class="actbar">${action}</div>` : ""}${sheetHTML()}</div>`;
+    ${action ? `<div class="actbar">${action}</div>` : ""}
+    <nav class="rail" aria-label="Trip"><div class="card">
+      <div class="who">${av("dina", 40)}<div><b>Dina</b><span>Jakarta → Tokyo · 1–6 Nov</span></div></div>
+      <h3>Friends</h3>${["ayu", "bima", "citra"].map((f) => { const ks = keys.filter((x) => REQ[x].who === f); const paid = at("paid") ? ks.filter((x) => !S.notHere.has(x)).reduce((s2, x) => s2 + pay(x), 0) : 0; return `<button class="ord"><span class="av" style="--c:${PEOPLE[f].c};--s:40px">${PEOPLE[f].n[0]}</span><div><b>${PEOPLE[f].n}</b><span>${ks.length} item${ks.length > 1 ? "s" : ""} · ${at("paid") ? Y(paid) + " paid" : Y(ks.reduce((s2, x) => s2 + hold(x), 0)) + " held"}</span></div></button>`; }).join("")}
+    </div></nav>
+    <aside class="aside" aria-label="Money">
+      <div class="card"><h3>Money · PayPal</h3>${kp}</div>
+      <div class="card"><h3>PayPal activity</h3><div class="timeline">${dinaTimeline()}</div></div>
+    </aside>
+    ${sheetHTML()}</div>`;
+}
+
+function dinaTimeline() {
+  return [
+    ["4 holds approved · ¥6,200", "Sat 31 Oct", at("held"), "money-ev"],
+    ["Shopping started", "Mon 2 Nov", at("shopping")],
+    ["Bima: swap asked", "Mon 2 Nov", S.swapAsked],
+    ["3 captured · ¥3,104", "Mon 2 Nov", at("paid"), "money-ev g"],
+    ["1 voided · ¥1,400", "Mon 2 Nov", at("paid"), "money-ev gr"],
+    ["Ayu got her bag", "Sat 7 Nov", at("delivered")],
+  ].map(([a, b, done, cls = ""]) => `<div class="tl ${done ? "done" : ""} ${done ? cls : ""}"><span class="d"></span><span>${a}</span><span>${done ? b : ""}</span></div>`).join("");
 }
 
 function jobRow(k, t) {
@@ -207,7 +244,9 @@ function render() {
   $("#screen").innerHTML = S.as === "dina" ? dinaView() : friendView(S.as);
   document.querySelectorAll(".controls [data-as]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.as === S.as));
   const st = STEPS[S.step];
-  $("#hint").innerHTML = `<b>${S.step + 1}/${STEPS.length}</b>${st.hint}${st.who !== S.as ? ` <button class="go" data-as="${st.who}">Go to ${PEOPLE[st.who].n}</button>` : ""}`;
+  const hintHTML = `<b>${S.step + 1}/${STEPS.length}</b><span>${st.hint}</span>${st.who !== S.as ? ` <button class="go" data-as="${st.who}">Go to ${PEOPLE[st.who].n}</button>` : ""}`;
+  $("#hint").innerHTML = hintHTML;
+  const hb = $("#hintbar"); if (hb) hb.innerHTML = hintHTML;
 }
 const next = (id) => { if (STEPS[S.step].id === id) S.step++; };
 function act(a, el) {

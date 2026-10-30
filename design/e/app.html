@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>Jastip · Track</title>
+<link rel="stylesheet" href="e.css">
+<link rel="stylesheet" href="adaptive.css">
+</head>
+<body class="app"><div class="board">
+  <header class="dock">
+    <div class="brand"><i>J</i><span>Jastip</span><span class="demo-tag">Demo · sandbox</span></div>
+    <div class="controls" role="group" aria-label="View as">
+      <button data-as="dina"><span class="av" style="--c:#5e5ce6">D</span><span class="lbl">Dina</span></button>
+      <button data-as="ayu"><span class="av" style="--c:#ff375f">A</span><span class="lbl">Ayu</span></button>
+      <button data-as="bima"><span class="av" style="--c:#ff9f0a">B</span><span class="lbl">Bima</span></button>
+      <button data-as="citra"><span class="av" style="--c:#30b0c7">C</span><span class="lbl">Citra</span></button>
+      <button class="rp" data-act="replay" aria-label="Replay">↺</button>
+    </div>
+    <div id="hint" hidden></div>
+  </header>
+  <div class="hintbar" id="hintbar" role="status"></div>
+  <div class="phone"><div id="screen"></div><div class="toast" id="toast" role="status"></div></div>
+</div>
+<script src="scenes.js"></script>
+<script src="e.js"></script>
+</body></html>
