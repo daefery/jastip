@@ -105,7 +105,7 @@ ok(w.status === 409, "S4 a held request can't be withdrawn", w.error);
 // Shopping. S1: only held items are marked; the unheld big one is dropped.
 await dina.call(`/api/trips/${trip.id}/shop`, {});
 const dropped = (await dina.call(`/api/trips/${trip.id}`)).requests.find((r) => r.id === big.id).status;
-ok(dropped === "released", "S1 a request without an approved hold is dropped from shopping");
+ok(dropped === "dropped", "S1 a request without an approved hold is dropped from shopping");
 const markBig = await dina.call(`/api/requests/${big.id}/mark`, { what: "found" });
 ok(markBig.status === 409, "S1 can't buy for a request with no hold");
 await dina.call(`/api/requests/${a.id}/mark`, { what: "found" });
@@ -132,7 +132,7 @@ ok(friendSettle.status === 403, "a friend can't trigger the charges");
 const settled = await dina.call(`/api/trips/${trip.id}/settle`, { receipt: rc.receipt });
 ok(settled.results?.filter((x) => x.charged).length === 3 && settled.results.filter((x) => x.released).length === 1, "PayPal: 3 CAPTURED exact, 1 VOIDED", JSON.stringify(settled.results));
 const again = await dina.call(`/api/trips/${trip.id}/settle`, { receipt: rc.receipt });
-ok(again.results?.every((x) => x.skip), "S7 settling twice charges nobody twice");
+ok(again.status === 409 && !again.results, "S7 settling twice charges nobody twice", again.error);
 
 const fin = await ayu.call(`/api/trips/${trip.id}`);
 const ar = fin.requests[0];

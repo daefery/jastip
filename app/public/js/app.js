@@ -1,5 +1,5 @@
 // Shell + router. Routes: / (welcome or trips), #/new, #/trip/:id, #/trip/:id/r/:rid, #/join/:code, #/me
-import { api, ic, esc, av, toast, sheet, pic } from "./ui.js";
+import { api, ic, esc, av, toast, sheet, pic, closeAllSheets } from "./ui.js";
 import { fmt } from "./money.js";
 import { SCENES, sceneHTML } from "./scenes.js";
 import { tripView } from "./screens/trip.js";
@@ -46,7 +46,7 @@ function welcome(next) {
 }
 
 const ROLE_ST = {
-  open: ["Taking asks", "gray"], holds: ["Holds open", "blue"], shopping: ["Shopping", "orange"], settled: ["Paid", "green"],
+  open: ["Taking asks", "gray"], holds: ["Holds open", "blue"], shopping: ["Shopping", "orange"], settling: ["Payment problem", "red"], settled: ["Paid", "green"],
 };
 function friendStatus(sum, t) {
   if (sum.swaps) return ["Pick a swap", "orange"];
@@ -89,11 +89,11 @@ function meSheet() {
   const s = sheet({ title: "You", body: `
     <div class="who-row" style="border:0">${av(u, 52)}<div><b style="font-size:18px">${esc(u.name)}</b><span>${u.kept} handover${u.kept === 1 ? "" : "s"} kept</span></div></div>
     <div class="menu">
-      <button data-switch><span class="ti" style="background:#5e5ce6">${ic("user")}</span><div><b>Switch person</b><span>For demos on one device</span></div></button>
+      ${store.config?.demoSwitch ? `<button data-switch><span class="ti" style="background:#5e5ce6">${ic("user")}</span><div><b>Switch person</b><span>Demo only: act as someone on this trip</span></div></button>` : ""}
       <a href="#/new" data-close><button style="width:100%"><span class="ti" style="background:#0b0b0b">${ic("plus")}</span><div style="text-align:left"><b>New trip</b><span>Going somewhere?</span></div></button></a>
     </div>
     <p class="hint" style="margin-top:14px">PayPal ${store.config?.paypalTest ? "test mode" : "sandbox"} · AI ${store.config?.ai ? esc(store.config.aiModel) : "off"}</p>` });
-  s.el.querySelector("[data-switch]").onclick = async () => {
+  const sw = s.el.querySelector("[data-switch]"); if (sw) sw.onclick = async () => {
     const people = new Map();
     for (const t of [...store.mine, ...store.joined]) { const v = await api(`/api/trips/${t.id}`).catch(() => null); if (!v) continue; people.set(v.owner.id, v.owner); v.requests.forEach((r) => people.set(r.friend.id, r.friend)); }
     s.el.querySelector(".menu").innerHTML = [...people.values()].map((p) => `<button data-uid="${p.id}"><span>${av(p, 44)}</span><div><b>${esc(p.name)}</b><span>${p.id === u.id ? "You now" : "Switch"}</span></div></button>`).join("") || `<p class="hint">Open a trip and get an ask first.</p>`;
@@ -102,6 +102,7 @@ function meSheet() {
 }
 
 export async function route() {
+  closeAllSheets();
   const [path, qs] = (location.hash.slice(1) || "/").split("?");
   const params = new URLSearchParams(qs || "");
   const parts = path.split("/").filter(Boolean);
@@ -113,10 +114,10 @@ export async function route() {
     else if (parts[0] === "trip") await tripView(app, parts[1], { rid: parts[2] === "r" ? parts[3] : null, params });
     else home();
   } catch (e) { toast(e.message, "err"); if (e.status === 404) location.hash = "#/"; }
-  app.querySelector("[data-me]")?.addEventListener("click", meSheet);
   scrollTo({ top: 0 });
 }
 
+document.addEventListener("click", (e) => { if (e.target.closest("[data-me]")) meSheet(); });
 (async () => {
   store.config = await api("/api/config");
   await refreshMe();

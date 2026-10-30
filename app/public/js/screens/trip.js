@@ -1,6 +1,6 @@
 // The tracker. Friend = an order (Uber Eats). Traveller = courier mode (Instacart Shopper).
 // Every number is from the server; every money move goes through the API (PayPal on the server).
-import { api, ic, esc, av, toast, busy, sheet, pic, qr, dateRange, when } from "../ui.js";
+import { api, ic, esc, av, toast, busy, sheet, pic, qrSvg, dateRange, when } from "../ui.js";
 import { topbar, store } from "../app.js";
 import { sceneHTML, skyOf } from "../scenes.js";
 import { fmt } from "../money.js";
@@ -33,6 +33,7 @@ const titleOf = (r) => (r.swap_title && ["swapped", "settled", "delivered"].incl
 /* ---------------- friend: the order ---------------- */
 function stageOf(r, t) {
   if (r.status === "delivered") return 5;
+  if (r.status === "dropped" || r.status === "declined") return 0;
   if (r.status === "settled" || r.status === "released" || (t.status === "settled" && r.status === "not_found")) return 3;
   if (t.status === "shopping" || ["found", "swap_asked", "swapped", "not_found"].includes(r.status)) return 2;
   if (r.status === "held") return 1;
@@ -45,9 +46,10 @@ function friendState(r, t, owner) {
   switch (r.status) {
     case "asked": Object.assign(S, { title: `Waiting for ${o}`, sub: `${o} checks your max price before anyone holds money.`, act: `<button class="btn red" data-withdraw>${ic("trash")}Withdraw ask</button>` }); break;
     case "declined": Object.assign(S, { title: `${o} can't take this one`, sub: "Nothing was held or charged.", scene: "released" }); break;
+    case "dropped": Object.assign(S, { title: "Not included in shopping", sub: `No hold was approved before ${o} went shopping. Nothing was held or charged.`, scene: "released" }); break;
     case "accepted":
-      if (t.status === "holds") Object.assign(S, { scene: "held", eta: `Shopping ${esc(t.shop_day)}`, title: "Approve your hold", sub: `Up to ${fmt(hold, cur)}. Nothing is charged today.`, needs: `${o} needs this before shopping day`, act: `<button class="btn pp" data-hold>Hold with <b>Pay<i>Pal</i></b></button>`, money: { value: hold, note: "hold to approve · ¥0 today".replace("¥0", fmt(0, cur)), fill: 100, color: "#cfe0ff" } });
-      else Object.assign(S, { title: `${o} accepted`, sub: "You'll approve a PayPal hold when the shopping day is set." });
+      if (t.status === "holds") Object.assign(S, { scene: "held", eta: `Shopping ${esc(t.shop_day)}`, title: "Approve your hold", sub: `Up to ${fmt(hold, cur)}. Nothing is charged today.`, needs: `${o} needs this before shopping day`, act: `<button class="btn pp" data-hold>Hold with <b>Pay<i>Pal</i></b></button><button class="btn light" data-withdraw>Withdraw ask</button>`, money: { value: hold, note: `hold to approve · ${fmt(0, cur)} today`, fill: 100, color: "#cfe0ff" } });
+      else Object.assign(S, { title: `${o} accepted`, sub: "You'll approve a PayPal hold when the shopping day is set.", act: `<button class="btn light" data-withdraw>${ic("trash")}Withdraw ask</button>` });
       break;
     case "held": case "found": case "swapped":
       Object.assign(S, { scene: t.status === "shopping" ? "shopping" : "held", eta: t.status === "shopping" ? "Shopping now" : `Shopping ${esc(t.shop_day || "")}`,
@@ -66,7 +68,7 @@ function friendState(r, t, owner) {
       Object.assign(S, { scene: "paid", eta: `${o} lands ${new Date(t.ret + "T00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}`, title: `Paid ${fmt(r.charged, cur)}. Exactly.`, sub: `The receipt line plus ${o}'s fee. ${fmt(hold - r.charged, cur)} of your hold was never taken.`,
         act: `<button class="btn green" data-got>${ic("box")}I got my item</button>`, money: { value: r.charged, note: `paid · ${fmt(hold - r.charged, cur)} never taken`, fill: pct, color: "var(--green)", rest: true } });
       break; }
-    case "released": Object.assign(S, { scene: "released", eta: "Settled", title: "Not found. Nothing paid.", sub: `Your ${fmt(hold, cur)} hold was released.`, money: { value: 0, note: `${fmt(hold, cur)} released`, fill: 0 } }); break;
+    case "released": Object.assign(S, { scene: "released", eta: "Settled", title: "Not found. Nothing paid.", sub: r.hold ? `Your ${fmt(r.hold, cur)} hold was released.` : "Nothing was held or charged.", money: { value: 0, note: r.hold ? `${fmt(r.hold, cur)} released` : "nothing held", fill: 0 } }); break;
     case "delivered": {
       const pct = Math.round((r.charged / hold) * 100);
       Object.assign(S, { scene: "delivered", eta: `Delivered ${r.delivered_at ? when(r.delivered_at) : ""}`, title: "Delivered. Enjoy!", sub: `Thanks for using Jastip with ${o}.`, money: { value: r.charged, note: `paid · ${fmt(hold - r.charged, cur)} never taken`, fill: pct, color: "var(--green)", rest: true } });
@@ -84,14 +86,16 @@ function order({ app, v, cur, reload }, rid) {
   const S = friendState(r, t, o);
   const n = stageOf(r, t);
   const hold = r.hold || r.hold_needed;
+  const neverHeld = !r.authorized_at;
   const timeline = tl([
     ["Asked", when(r.created_at), true],
     [`Hold approved · ${fmt(hold, cur)}`, r.authorized_at ? when(r.authorized_at) : "", !!r.authorized_at, "pp"],
     [`${esc(o.name)} shopping`, t.shop_day || "", n >= 2],
-    r.status === "released" || r.status === "not_found" ? [`Released · ${fmt(hold, cur)}`, "", r.status === "released", "dim"] : [`Paid ${r.charged ? fmt(r.charged, cur) : ""}${r.charged ? ` · ${fmt(hold - r.charged, cur)} released` : ""}`, r.captured_at ? when(r.captured_at) : "", !!r.captured_at, "ok"],
+    r.status === "dropped" || r.status === "declined" ? ["Not included · nothing held", "", true, "dim"] :
+    r.status === "released" || r.status === "not_found" ? [neverHeld ? "Nothing held" : `Released · ${fmt(hold, cur)}`, "", r.status === "released", "dim"] : [`Paid ${r.charged ? fmt(r.charged, cur) : ""}${r.charged ? ` · ${fmt(hold - r.charged, cur)} released` : ""}`, r.captured_at ? when(r.captured_at) : "", !!r.captured_at, "ok"],
     ["Delivered", r.delivered_at ? when(r.delivered_at) : "", r.status === "delivered"],
   ]);
-  const item = `<div class="item">${pic(r.art, 56)}<div style="min-width:0"><b>${esc(titleOf(r))}</b><div class="s">${r.swap_title && r.status !== "swap_asked" ? "Swap · within your max · " : r.detail ? esc(r.detail) + " · " : ""}max ${fmt(r.cap, cur)}${r.rule !== "ask" ? ` · ${r.rule === "similar" ? "similar ok" : "skip if sold out"}` : ""}</div>${r.line_text ? `<div class="rl">${esc(r.line_text)}</div>` : ""}</div>
+  const item = `<div class="item">${pic(r.art, 56)}<div style="min-width:0"><b class="wrap">${esc(titleOf(r))}</b><div class="s">${r.swap_title && r.status !== "swap_asked" ? "Swap · within your max · " : r.detail ? esc(r.detail) + " · " : ""}max ${fmt(r.cap, cur)}${r.rule !== "ask" ? ` · ${r.rule === "similar" ? "similar ok" : "skip if sold out"}` : ""}</div>${r.line_text ? `<div class="rl">${esc(r.line_text)}</div>` : ""}</div>
     <div class="a">${r.price ? `<b class="num">${fmt(r.price, cur)}</b><span>+ ${fmt(t.fee, cur)} fee</span>` : `<b class="num">${fmt(r.cap, cur)}</b><span>max</span>`}</div></div>`;
   const others = reqs.filter((x) => x.id !== r.id);
   app.innerHTML = `${topbar({ back: "#/", title: `${o.name} · ${t.city}` })}<main class="trk">
@@ -103,7 +107,7 @@ function order({ app, v, cur, reload }, rid) {
       <div class="in-aside">${moneyHTML(cur, S.money)}</div>
       <div class="who-row">${av(o, 46)}<div><b>${esc(o.name)}</b><span>Your jastiper · ${esc(t.city)} · ${o.kept ? `${o.kept} handovers kept` : "first trip"}</span></div><div class="acts"><button class="circ" data-chat aria-label="Message ${esc(o.name)}">${ic("chat")}</button></div></div>
       ${item}
-      ${others.length ? `<div class="in-aside"><div class="sec-t"><span>Your other asks</span></div>${others.map((x) => `<a class="item" href="#/trip/${t.id}/r/${x.id}" style="grid-template-columns:44px 1fr auto">${pic(x.art, 44)}<div><b>${esc(titleOf(x))}</b><div class="s">${statusWord(x, t)}</div></div><span>${ic("arrow")}</span></a>`).join("")}</div>` : ""}
+      ${others.length ? `<div class="pick-asks"><div class="sec-t"><span>Your other ask${others.length > 1 ? "s" : ""}</span></div>${others.map((x) => `<a class="item" href="#/trip/${t.id}/r/${x.id}" style="grid-template-columns:44px 1fr auto">${pic(x.art, 44)}<div style="min-width:0"><b class="wrap">${esc(titleOf(x))}</b><div class="s">${statusWord(x, t)}</div></div><span>${ic("arrow")}</span></a>`).join("")}</div>` : ""}
       <div class="in-aside"><div class="sec-t"><span>Timeline</span></div>${timeline}</div>
     </section>
     ${S.act ? `<div class="actbar">${S.act}</div>` : ""}
@@ -125,7 +129,7 @@ function order({ app, v, cur, reload }, rid) {
 }
 
 function statusWord(r, t) {
-  return { asked: "Waiting for OK", declined: "Declined", accepted: t.status === "holds" ? "Approve hold" : "Accepted", held: "Held", found: "In the basket", swap_asked: "Pick a swap", swapped: "Swap in basket", not_found: "Not found", settled: "Paid", released: "Released", delivered: "Delivered" }[r.status] || r.status;
+  return { asked: "Waiting for OK", declined: "Declined", dropped: "Not included", accepted: t.status === "holds" ? "Approve hold" : "Accepted", held: "Held", found: "In the basket", swap_asked: "Pick a swap", swapped: "Swap in basket", not_found: "Not found", settled: "Paid", released: "Released", delivered: "Delivered" }[r.status] || r.status;
 }
 function dotOf(r, t) {
   return { settled: "#05a357", delivered: "#05a357", released: "#a8a8a8", declined: "#a8a8a8", swap_asked: "#ff7a00", held: "#276ef1", found: "#ff7a00", swapped: "#ff7a00", accepted: t.status === "holds" ? "#ff7a00" : "#a8a8a8" }[r.status] || "#a8a8a8";
@@ -190,6 +194,7 @@ function courier({ app, v, cur, reload }, openShare) {
   const by = (...st) => rs.filter((r) => st.includes(r.status));
   const holdSum = (xs) => xs.reduce((s, r) => s + (r.hold || r.hold_needed || 0), 0);
   const asked = by("asked"), acc = by("accepted"), held = by("held"), live = by("held", "found", "swap_asked", "swapped", "not_found");
+  const nf = by("not_found");
   const paid = by("settled", "delivered"), rel = by("released");
   let scene = "open", eta = dateRange(t), title = "", sub = "", n = 0, body = "", action = "";
 
@@ -200,15 +205,23 @@ function courier({ app, v, cur, reload }, openShare) {
     else { scene = "asked"; title = `${acc.length} ask${acc.length > 1 ? "s" : ""} accepted`; sub = "Pick your shopping day. Friends then approve PayPal holds."; action = `<button class="btn dark" data-day>${ic("cal")}Pick shopping day</button>`; }
   } else if (t.status === "holds") {
     n = 1; scene = "held"; eta = `Shopping ${esc(t.shop_day)}`;
-    title = held.length === acc.length + held.length ? `${held.length} holds in. Go shopping!` : `${held.length} of ${held.length + acc.length} holding`;
+    title = asked.length ? `${asked.length} new ask${asked.length > 1 ? "s" : ""} to check` : held.length && !acc.length ? `${held.length} holds in. Go shopping!` : `${held.length} of ${held.length + acc.length} holding`;
     sub = `${fmt(holdSum(held), cur)} held for you by PayPal. ${fmt(0, cur)} charged. Only held asks go on your list.`;
     action = `<button class="btn dark" data-shop ${held.length ? "" : "disabled"}>${ic("bag")}Start shopping${held.length ? ` · ${held.length}` : ""}</button>`;
+  } else if (t.status === "settling") {
+    n = 3; scene = "paid"; eta = "Payment problem";
+    const stuck = by("found", "swapped", "not_found");
+    title = `${stuck.length} payment${stuck.length > 1 ? "s" : ""} didn't go through`;
+    sub = "PayPal didn't confirm these. The holds are still in place. Retry, nothing is charged twice.";
+    action = `<button class="btn dark" data-retry>${ic("lock")}Retry failed payments</button>`;
   } else if (t.status === "shopping") {
     n = 2; scene = "shopping"; eta = "Shopping now";
     const swaps = by("swap_asked"), found = by("found", "swapped"), looking = by("held"), nf = by("not_found");
-    title = swaps.length ? `Waiting for ${esc(swaps[0].friend.name)}` : `${found.length} of ${live.length} in the basket`;
-    sub = swaps.length ? "They're picking a swap. Keep shopping." : looking.length ? "Tap Found, or ••• for sold out." : "All done. Pay at the till, then scan the receipt.";
-    action = `<button class="btn dark" data-receipt ${found.length && !swaps.length ? "" : "disabled"}>${ic("camera")}Pay &amp; scan receipt</button>`;
+    const nothing = !found.length && !swaps.length && !looking.length;
+    title = swaps.length ? `Waiting for ${esc(swaps[0].friend.name)}` : nothing ? "Nothing found this time" : `${found.length} of ${live.length} in the basket`;
+    sub = swaps.length ? "They're picking a swap. Keep shopping." : nothing ? `Finish to release every hold (${fmt(holdSum(nf), cur)}). No receipt needed.` : looking.length ? "Tap Found, or ••• for sold out." : "All done. Pay at the till, then scan the receipt.";
+    action = nothing ? `<button class="btn dark" data-finish>${ic("check")}Finish trip · release ${fmt(holdSum(nf), cur)}</button>`
+      : `<button class="btn dark" data-receipt ${found.length && !swaps.length ? "" : "disabled"}>${ic("camera")}Pay &amp; scan receipt</button>`;
   } else {
     n = paid.length && paid.every((r) => r.status === "delivered") ? 5 : 3; scene = n === 5 ? "delivered" : "paid"; eta = "Settled";
     title = `${fmt(paid.reduce((s, r) => s + r.charged, 0), cur)} paid to you`;
@@ -216,21 +229,26 @@ function courier({ app, v, cur, reload }, openShare) {
     action = paid.some((r) => r.status === "settled") ? `<button class="btn dark" data-qr>${ic("qr")}Show handover code</button>` : "";
   }
 
-  const row = (r, right) => `<div class="jr">${pic(r.art, 48)}<div style="min-width:0"><b>${esc(titleOf(r))}</b><div class="s">${av(r.friend, 18)}<em>${esc(r.friend.name)} · max ${fmt(r.cap, cur)}${r.detail ? " · " + esc(r.detail) : ""}</em></div></div>${right}</div>`;
+  const row = (r, right) => `<div class="jr">${pic(r.art, 48)}<div style="min-width:0"><b class="wrap2">${esc(titleOf(r))}</b><div class="s">${av(r.friend, 18)}<em>${esc(r.friend.name)}</em></div><div class="s2">${[`<strong class="num">max ${fmt(r.cap, cur)}</strong>`, r.detail && esc(r.detail), r.rule === "similar" && "similar ok", r.rule === "skip" && "skip if sold out"].filter(Boolean).join(" · ")}</div></div>${right}</div>`;
   const group = (label, xs, right) => (xs.length ? `<div class="group">${label}<span>${xs.length}</span></div>${xs.map((r) => row(r, right(r))).join("")}` : "");
   if (t.status === "open") {
     body = group("New asks", asked, (r) => `<div class="tbtn-row"><button class="tbtn x" data-decline="${r.id}" aria-label="Decline ${esc(r.title)}">${ic("x")}</button><button class="tbtn blue" data-accept="${r.id}" aria-label="Accept ${esc(r.title)}">${ic("check")}<span class="lbl">Accept</span></button></div>`)
       + group("Accepted", acc, () => `<span class="tbtn x">${ic("check")}OK</span>`) + group("Declined", by("declined"), () => "");
   } else if (t.status === "holds") {
-    body = group("Held by PayPal", held, (r) => `<span class="rt num">${fmt(r.hold, cur)}<small>held</small></span>`) + group("Waiting for hold", acc, () => `<span class="tbtn x">${ic("clock")}waiting</span>`);
+    body = group("New asks", asked, (r) => `<div class="tbtn-row"><button class="tbtn x" data-decline="${r.id}" aria-label="Decline ${esc(r.title)}">${ic("x")}</button><button class="tbtn blue" data-accept="${r.id}" aria-label="Accept ${esc(r.title)}">${ic("check")}<span class="lbl">Accept</span></button></div>`)
+      + group("Held by PayPal", held, (r) => `<span class="rt num">${fmt(r.hold, cur)}<small>held</small></span>`) + group("Waiting for hold", acc, () => `<span class="tbtn x">${ic("clock")}waiting</span>`);
   } else if (t.status === "shopping") {
     body = group("Found", by("found", "swapped"), (r) => `<button class="tbtn ok" data-mark="${r.id}" data-w="held" aria-label="Undo found ${esc(r.title)}">${ic("check")}</button>`)
       + group("Swaps", by("swap_asked"), (r) => `<span class="tbtn sw">Asked ${esc(r.friend.name)}</span>`)
       + group("Still looking", by("held"), (r) => `<div class="tbtn-row"><button class="tbtn" data-more="${r.id}" aria-label="More for ${esc(r.title)}">${ic("more")}</button><button class="tbtn blue" data-mark="${r.id}" data-w="found" aria-label="Found ${esc(r.title)}">${ic("check")}<span class="lbl">Found</span></button></div>`)
       + group("Not here", by("not_found"), (r) => `<button class="tbtn x" data-mark="${r.id}" data-w="held">Undo</button>`);
+  } else if (t.status === "settling") {
+    body = group("Not confirmed yet", by("found", "swapped", "not_found"), (r) => `<span class="rt num" style="color:var(--red)">${fmt(r.hold, cur)}<small>still held</small></span>`)
+      + group("Done", [...paid, ...rel], (r) => `<span class="rt num" style="color:${r.charged ? "var(--green)" : "var(--l2)"}">${fmt(r.charged || 0, cur)}<small>${r.charged ? "charged" : "released"}</small></span>`);
   } else {
     body = group("Paid", paid, (r) => `<span class="rt num" style="color:var(--green)">${fmt(r.charged, cur)}<small>${r.status === "delivered" ? "delivered" : "to hand over"}</small></span>`)
-      + group("Released", rel, (r) => `<span class="rt num" style="color:var(--l2)">${fmt(0, cur)}<small>${fmt(r.hold || 0, cur)} released</small></span>`);
+      + group("Released", rel, (r) => `<span class="rt num" style="color:var(--l2)">${fmt(0, cur)}<small>${fmt(r.hold || 0, cur)} released</small></span>`)
+      + group("Not included", by("dropped"), () => `<span class="rt num" style="color:var(--l2)">${fmt(0, cur)}<small>never held</small></span>`);
   }
   if (!rs.length) body = `<div class="empty"><b>No asks yet</b><span>Send the link to your group chat.</span></div>`;
 
@@ -241,7 +259,7 @@ function courier({ app, v, cur, reload }, openShare) {
   const activity = tl(activityRows(v.events));
   const friends = [...new Map(rs.map((r) => [r.friend.id, r.friend])).values()];
 
-  app.innerHTML = `${topbar({ back: "#/", title: `Your trip · ${t.city}` })}<main class="trk">
+  app.innerHTML = `${topbar({ back: "#/", title: `Your trip · ${t.city}` })}<main class="trk ${t.status === "shopping" ? "shop" : ""}">
     <section class="scene" style="--sky:${skyOf(scene)}"><div class="tb"><a class="rb" href="#/" aria-label="Back">${ic("back")}</a><button class="chipb" data-share>${ic("share")}Trip link</button></div>${sceneHTML(scene)}</section>
     <section class="panel" aria-live="polite"><div class="grab"></div>
       <div class="eta">${eta}</div><h1 class="status">${title}<small>${sub}</small></h1>
@@ -270,8 +288,19 @@ function courier({ app, v, cur, reload }, openShare) {
   on("[data-mark]", (b) => act(b, () => api(`/api/requests/${b.dataset.mark}/mark`, { body: { what: b.dataset.w } })));
   on("[data-more]", (b) => moreSheet(v, rs.find((r) => r.id === b.dataset.more), reload));
   on("[data-receipt]", () => receiptFlow(v, reload));
-  on("[data-qr]", () => sheet({ title: "Handover code", body: `${qr(t.id)}<p class="hint" style="text-align:center">Friends tap “I got my item” when they get it. That's your proof.</p>` }));
+  on("[data-finish]", (b) => { if (confirm(`Release every hold? Nothing will be charged.`)) act(b, () => api(`/api/trips/${t.id}/finish`, { body: {} }), "All holds released"); });
+  on("[data-retry]", (b) => act(b, async () => { const o = await api(`/api/trips/${t.id}/retry`, { body: {} }); const bad = o.results.filter((x) => x.error).length; if (bad) throw new Error(`${bad} still failing. Try again in a minute.`); }, "Payments confirmed"));
+  on("[data-qr]", () => handoverSheet(v));
   if (openShare) shareSheet(v);
+}
+
+// Each friend scans this; it opens their own item on their phone, where "I got my item" confirms the handover.
+function handoverSheet(v) {
+  const url = `${location.origin}/#/trip/${v.trip.id}`;
+  const left = v.requests.filter((r) => r.status === "settled");
+  sheet({ title: "Handover code", body: `${qrSvg(url, "Handover code: opens this trip on your friend's phone")}
+    <p class="hint" style="text-align:center;margin-bottom:12px">Your friend scans it, sees their exact charge and taps <b>I got my item</b>. That's your proof.</p>
+    <div class="split">${left.map((r) => `<div class="sr">${av(r.friend, 28)}<div class="t">${esc(r.friend.name)} · ${esc(titleOf(r))}</div><b class="num">${fmt(r.charged, v.trip.currency)}</b></div>`).join("") || `<p class="hint">Everyone has confirmed.</p>`}</div>` });
 }
 
 function shareSheet(v) {

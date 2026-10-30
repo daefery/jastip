@@ -10,13 +10,13 @@
 //  S7  One capture per hold (idempotent PayPal-Request-Id + status check).
 //  S8  Swaps need the friend's tap, and a swap above the cap is refused.
 import { id, now } from "./db.mjs";
-import * as pp from "./paypal.mjs";
+import * as paypal from "./paypal.mjs";
 import { fmt, usd, CUSTOMS_USD, NEW_FRIEND_USD } from "../public/js/money.js";
 
 const COLORS = ["#ff2d55", "#007aff", "#af52de", "#34c759", "#ff9500", "#5ac8fa", "#ff3b30", "#5856d6"];
 export class Rule extends Error { constructor(msg, code = 409) { super(msg); this.code = code; } }
 
-export function makeTrips(db) {
+export function makeTrips(db, pp = paypal) {
   const one = (sql, ...a) => db.get(sql, ...a);
   const all = (sql, ...a) => db.all(sql, ...a);
   const run = (sql, ...a) => db.run(sql, ...a);
@@ -38,6 +38,8 @@ export function makeTrips(db) {
   }
 
   async function createTrip(owner, t) {
+    if (!Number.isFinite(t.fee) || t.fee < 0) throw new Rule("Fee must be zero or more", 400);
+    if (t.payee_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t.payee_email)) throw new Rule("That PayPal email doesn't look right", 400);
     const tid = id(10);
     await run(`INSERT INTO trips(id,owner_id,home,home_code,city,city_code,currency,depart,ret,fee,payee_email,invite,created_at)
          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`, tid, owner.id, t.home, t.home_code, t.city, t.city_code, t.currency, t.depart, t.ret,
@@ -124,8 +126,10 @@ export function makeTrips(db) {
 
   async function startShopping(t, owner) {
     if (!isOwner(t, owner)) throw new Rule("Only the traveller", 403);
+    if (!(await all("SELECT id FROM requests WHERE trip_id=? AND status='held'", t.id)).length) throw new Rule("No approved holds yet");
     await run("UPDATE trips SET status='shopping' WHERE id=?", t.id);
-    await run("UPDATE requests SET status='released' WHERE trip_id=? AND status IN ('asked','accepted')", t.id); // S1
+    // S1: asks without an approved hold are left out. Nothing was held, so nothing is "released".
+    await run("UPDATE requests SET status='dropped' WHERE trip_id=? AND status IN ('asked','accepted')", t.id);
   }
 
   async function mark(t, owner, rid, what, swap) {
@@ -175,6 +179,7 @@ export function makeTrips(db) {
 
   async function settle(t, owner, plan, receiptId) {
     if (!isOwner(t, owner)) throw new Rule("Only the traveller", 403);
+    if (!["shopping", "settling"].includes(t.status)) throw new Rule("This trip is already settled");
     const out = [];
     for (const p of plan) {
       const r = await request(p.r.id);
@@ -198,9 +203,20 @@ export function makeTrips(db) {
         out.push({ id: r.id, error: e.message });
       }
     }
-    await run("UPDATE trips SET status='settled' WHERE id=?", t.id);
-    if (receiptId) await log(t.id, null, "trip", "Receipt settled", receiptId);
+    const failed = out.filter((x) => x.error).length;
+    await run("UPDATE trips SET status=?, receipt_id=COALESCE(?, receipt_id) WHERE id=?", failed ? "settling" : "settled", receiptId, t.id);
+    if (receiptId && !failed) await log(t.id, null, "trip", "Receipt settled", receiptId);
     return out;
+  }
+
+  // Nothing bought (every item not found / skipped): void all holds, no receipt needed.
+  async function finishEmpty(t, owner) {
+    if (!isOwner(t, owner)) throw new Rule("Only the traveller", 403);
+    if (t.status !== "shopping" && t.status !== "settling") throw new Rule("Nothing to finish");
+    const open = await all("SELECT * FROM requests WHERE trip_id=? AND status IN ('held','found','swap_asked','swapped')", t.id);
+    if (open.length) throw new Rule("Some items are still in the basket or waiting. Scan the receipt instead.");
+    const plan = (await all("SELECT * FROM requests WHERE trip_id=? AND status='not_found'", t.id)).map((r) => ({ r, line: null, charge: 0, why: "not found" }));
+    return settle(t, owner, plan, null);
   }
 
   async function confirmDelivery(t, friend, rid) {
@@ -212,11 +228,17 @@ export function makeTrips(db) {
   }
 
   async function customs(t) {
-    const rows = await all("SELECT charged, cap FROM requests WHERE trip_id=? AND status NOT IN ('declined','released','asked')", t.id);
+    const rows = await all("SELECT charged, cap FROM requests WHERE trip_id=? AND status NOT IN ('declined','released','asked','dropped','accepted')", t.id);
     return { usd: Math.round(rows.reduce((s, x) => s + usd(x.charged ?? x.cap, t.currency), 0)), limit: CUSTOMS_USD };
   }
 
+  async function canSee(t, viewer) {
+    if (isOwner(t, viewer)) return true;
+    return !!(await one("SELECT 1 AS x FROM requests WHERE trip_id=? AND friend_id=? LIMIT 1", t.id, viewer.id));
+  }
+
   async function view(t, viewer) {
+    if (!(await canSee(t, viewer))) throw new Rule("Trip not found", 404);
     const owner = await user(t.owner_id);
     const mine = isOwner(t, viewer);
     const raw = await all("SELECT * FROM requests WHERE trip_id=? ORDER BY created_at", t.id);
@@ -233,7 +255,7 @@ export function makeTrips(db) {
       trip: { ...t, payee_email: mine ? t.payee_email : undefined, invite: mine ? t.invite : undefined },
       owner: { id: owner.id, name: owner.name, color: owner.color, kept: owner.kept },
       mine, requests: reqs, events, customs: await customs(t),
-      receipt: receipt ? { ...receipt, lines: JSON.parse(receipt.lines), matches: JSON.parse(receipt.matches) } : null,
+      receipt: receipt && mine ? { ...receipt, lines: JSON.parse(receipt.lines), matches: JSON.parse(receipt.matches) } : null,
     };
   }
 
@@ -264,5 +286,5 @@ export function makeTrips(db) {
   const receipt = (rid, tid) => one("SELECT * FROM receipts WHERE id=? AND trip_id=?", rid, tid);
   const markable = (tid) => all("SELECT * FROM requests WHERE trip_id=? AND status IN ('found','swapped')", tid);
 
-  return { user, trip, request, createUser, createTrip, addRequest, withdraw, decide, setShopDay, startHold, finishHold, startShopping, mark, answerSwap, planSettlement, settle, confirmDelivery, view, tripsFor, log, byInvite, saveReceipt, receipt, markable };
+  return { canSee, finishEmpty, user, trip, request, createUser, createTrip, addRequest, withdraw, decide, setShopDay, startHold, finishHold, startShopping, mark, answerSwap, planSettlement, settle, confirmDelivery, view, tripsFor, log, byInvite, saveReceipt, receipt, markable };
 }

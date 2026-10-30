@@ -105,10 +105,10 @@ try {
   await dina.reload(); await waitText(dina, "Go shopping"); await shot(dina, "all-held");
   await tap(dina, "[data-shop]"); await waitText(dina, "in the basket"); await shot(dina, "shopping");
   const found = async (title) => { const row = dina.locator(".jr", { hasText: title }); await (touch ? row.locator('[data-w="found"]').tap() : row.locator('[data-w="found"]').click()); await dina.waitForTimeout(600); };
-  await found("KitKat"); await found("Hada Labo");
+  await found("Ayu"); await found("Hada Labo");
   const more = async (title) => { const row = dina.locator(".jr", { hasText: title }); await (touch ? row.locator("[data-more]").tap() : row.locator("[data-more]").click()); await dina.waitForTimeout(400); };
   await more("Roihi"); await shot(dina, "more-sheet"); await tap(dina, '.sheet [data-w="not_found"]'); await dina.waitForTimeout(600);
-  await more("Banana"); await tap(dina, '.sheet [data-w="swap"]'); await dina.fill("#swt", "Tokyo Banana 4 pack"); await dina.fill("#swp", "648"); await shot(dina, "swap-form");
+  await more("Bima"); await tap(dina, '.sheet [data-w="swap"]'); await dina.fill("#swt", "Tokyo Banana 4 pack"); await dina.fill("#swp", "648"); await shot(dina, "swap-form");
   await tap(dina, "#swf .btn"); await waitText(dina, "Waiting for Bima"); await shot(dina, "waiting-swap");
 
   // Bima picks the swap

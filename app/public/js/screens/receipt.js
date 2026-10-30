@@ -7,7 +7,7 @@ export function receiptFlow(v, done) {
   const s = sheet({ title: "Scan receipt", right: `<button class="lk" data-close>Cancel</button>`, body: `<div id="rx">
       <div class="note">${ic("receipt")}<span>Lay the receipt flat in good light. Each friend pays their line + ${fmt(t.fee, cur)}, never more than their hold.</span></div>
       <div style="height:14px"></div>
-      <label class="btn dark" for="rx-file" style="cursor:pointer">${ic("camera")}Take photo</label>
+      <button class="btn dark" id="rx-take" data-primary>${ic("camera")}Take or choose photo</button>
       <input id="rx-file" type="file" accept="image/*" capture="environment" hidden>
       <div style="height:8px"></div>
       <button class="btn light" id="rx-sample">${ic("receipt")}Use sample receipt</button>
@@ -46,12 +46,13 @@ export function receiptFlow(v, done) {
         const out = await api(`/api/trips/${t.id}/settle`, { body: { receipt: r.receipt } });
         const bad = out.results.filter((x) => x.error);
         s.close();
-        toast(bad.length ? `${bad.length} PayPal call failed. See activity.` : "Charged exactly. Holds released.", bad.length ? "err" : "ok");
+        toast(bad.length ? `${bad.length} payment${bad.length > 1 ? "s" : ""} didn't go through. Retry from the trip.` : "Charged exactly. Holds released.", bad.length ? "err" : "ok");
         done();
       } catch (er) { busy(e.currentTarget, false); toast(er.message, "err"); }
     };
   };
 
+  box.querySelector("#rx-take").onclick = () => box.querySelector("#rx-file").click();
   box.querySelector("#rx-file").onchange = async (e) => { const f = e.target.files[0]; if (f) read(await fileToDataUrl(f)); };
   box.querySelector("#rx-sample").onclick = async () => {
     const blob = await (await fetch("/sample/receipt.png")).blob();

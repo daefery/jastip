@@ -57,14 +57,28 @@ export function sheet({ title, body, left = "", right, onClose, label }) {
   el.className = "sheet"; el.setAttribute("role", "dialog"); el.setAttribute("aria-modal", "true"); el.setAttribute("aria-label", label || title || "Dialog");
   el.innerHTML = `<div class="grab"></div><div class="sh-h">${left || "<span></span>"}<h2>${esc(title || "")}</h2>${right ?? `<button class="lk" data-close>Close</button>`}</div>${body}`;
   host.append(scrim, el);
+  const app = document.getElementById("app");
+  app.inert = true;
   let done = false;
-  const close = () => {
+  const close = (instant) => {
     if (done) return; done = true;
-    el.classList.add("closing"); scrim.classList.add("closing");
-    setTimeout(() => { el.remove(); scrim.remove(); prev?.focus?.({ preventScroll: true }); onClose?.(); }, 260);
+    app.inert = false;
     removeEventListener("keydown", key);
+    const finish = () => { el.remove(); scrim.remove(); if (prev?.isConnected) prev.focus?.({ preventScroll: true }); onClose?.(); };
+    if (instant === true) return finish();
+    el.classList.add("closing"); scrim.classList.add("closing");
+    setTimeout(finish, 260);
   };
-  const key = (e) => { if (e.key === "Escape") close(); };
+  const key = (e) => {
+    if (e.key === "Escape") { close(); return; }
+    if (e.key !== "Tab") return;
+    const f = [...el.querySelectorAll('a[href],button:not([disabled]),input:not([type=hidden]):not([hidden]),select,textarea,[tabindex]:not([tabindex="-1"])')].filter((x) => x.offsetParent !== null);
+    if (!f.length) return;
+    const first = f[0], last = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    else if (!el.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+  };
   addEventListener("keydown", key);
   scrim.onclick = close;
   el.addEventListener("click", (e) => { if (e.target.closest("[data-close]")) close(); });
@@ -72,7 +86,7 @@ export function sheet({ title, body, left = "", right, onClose, label }) {
   el.addEventListener("touchstart", (e) => { if (el.scrollTop > 0 || innerWidth >= 700) return; y0 = e.touches[0].clientY; }, { passive: true });
   el.addEventListener("touchmove", (e) => { if (y0 == null) return; const dy = Math.max(0, e.touches[0].clientY - y0); el.style.transform = `translateY(${dy}px)`; }, { passive: true });
   el.addEventListener("touchend", (e) => { if (y0 == null) return; const dy = e.changedTouches[0].clientY - y0; y0 = null; el.style.transform = ""; if (dy > 110) close(); });
-  setTimeout(() => el.querySelector("input,[data-primary],button:not([data-close])")?.focus({ preventScroll: true }), 320);
+  setTimeout(() => (el.querySelector("[data-primary],input:not([hidden]),button:not([data-close])") || el.querySelector("button"))?.focus({ preventScroll: true }), 320);
   el._close = close;
   return { el, close };
 }
@@ -83,6 +97,12 @@ export function busy(btn, on, label) {
   else { btn.disabled = false; if (btn.dataset.html) btn.innerHTML = btn.dataset.html; }
 }
 
+import qrcode from "./vendor/qrcode.js";
+// Real QR code (MIT, Kazuhiko Arase) for a URL.
+export function qrSvg(text, label = "QR code") {
+  const q = qrcode(0, "M"); q.addData(text); q.make();
+  return `<div class="qrreal" role="img" aria-label="${esc(label)}">${q.createSvgTag({ cellSize: 6, margin: 2, scalable: true })}</div>`;
+}
 export function qr(seed) {
   let h = 0; for (const c of String(seed)) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   let cells = "";
@@ -106,3 +126,10 @@ export function fileToDataUrl(file, max = 1600) {
 export const dayLabel = (iso) => new Date(iso + "T00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 export const dateRange = (t) => { const d = (s) => new Date(s + "T00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" }); return `${d(t.depart)} – ${d(t.ret)}`; };
 export const when = (ms) => new Date(ms).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+
+// Close every open sheet immediately (route change, browser Back).
+export function closeAllSheets() {
+  document.querySelectorAll("#sheets .sheet").forEach((x) => x._close?.(true));
+  document.getElementById("sheets").innerHTML = "";
+  document.getElementById("app").inert = false;
+}

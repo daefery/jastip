@@ -9,31 +9,47 @@ import { PLACES, HOMES, toMinor } from "../public/js/money.js";
 const json = (body, status = 200, headers = {}) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...headers } });
 const cookieOf = (req, k) => (req.headers.get("cookie") || "").split(/;\s*/).map((c) => c.split("=")).find(([a]) => a === k)?.[1];
 const secure = (req) => new URL(req.url).protocol === "https:" ? "; Secure" : "";
-const setUid = (req, uid) => ({ "Set-Cookie": `jt_uid=${uid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000${secure(req)}` });
+const setSid = (req, sid) => ({ "Set-Cookie": `jt_sid=${sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000${secure(req)}` });
+// Demo switching (one device acting as several people) only when the server says so (DEMO_SWITCH=1).
+const demoSwitch = () => env("DEMO_SWITCH") === "1";
 
 export function makeApi(db, { saveImage } = {}) {
   const T = makeTrips(db);
   const routes = [];
   const on = (method, pattern, fn) => routes.push({ method, re: new RegExp("^" + pattern.replace(/:(\w+)/g, "(?<$1>[^/]+)") + "$"), fn });
 
-  const me = async (req) => { const uid = cookieOf(req, "jt_uid"); return uid ? T.user(uid) : null; };
+  const newSession = async (uid) => { const sid = id(32); await db.run("INSERT INTO sessions(token,user_id,created_at) VALUES(?,?,?)", sid, uid, Date.now()); return sid; };
+  const me = async (req) => {
+    const sid = cookieOf(req, "jt_sid"); if (!sid) return null;
+    const row = await db.get("SELECT user_id FROM sessions WHERE token=?", sid);
+    return row ? T.user(row.user_id) : null;
+  };
   const needMe = async (req) => { const u = await me(req); if (!u) throw new Rule("Sign in first", 401); return u; };
   const needTrip = async (tid) => { const t = tid ? await T.trip(tid) : null; if (!t) throw new Rule("Trip not found", 404); return t; };
   const tripOfReq = async (rid) => { const r = await T.request(rid); if (!r) throw new Rule("Request not found", 404); return needTrip(r.trip_id); };
   const body = async (req, limit = 8e6) => { const s = await req.text(); if (s.length > limit) throw new Rule("Too big", 413); return s ? JSON.parse(s) : {}; };
   const origin = (req) => env("PUBLIC_URL") || new URL(req.url).origin;
 
-  on("GET", "/api/config", () => ({ places: PLACES, homes: HOMES, paypal: pp.paypalReady(), paypalTest: pp.fake(), ai: ai.aiReady(), aiModel: ai.aiName(), sandbox: true }));
+  on("GET", "/api/config", () => ({ places: PLACES, homes: HOMES, paypal: pp.paypalReady(), paypalTest: pp.fake(), ai: ai.aiReady(), aiModel: ai.aiName(), sandbox: true, demoSwitch: demoSwitch() }));
   on("GET", "/api/me", async (req) => { const u = await me(req); return u ? { user: u, ...(await T.tripsFor(u)) } : { user: null }; });
-  on("POST", "/api/me", async (req) => { const u = await T.createUser((await body(req)).name); return json({ user: u }, 200, setUid(req, u.id)); });
-  on("POST", "/api/switch", async (req) => { const u = await T.user((await body(req)).id); if (!u) throw new Rule("No such user", 404); return json({ user: u }, 200, setUid(req, u.id)); });
+  on("POST", "/api/me", async (req) => { const u = await T.createUser((await body(req)).name); return json({ user: u }, 200, setSid(req, await newSession(u.id))); });
+  on("POST", "/api/switch", async (req) => {
+    if (!demoSwitch()) throw new Rule("Not available", 404);
+    const cur = await needMe(req); const b = await body(req);
+    const u = await T.user(b.id); if (!u) throw new Rule("No such user", 404);
+    // only people who share a trip with the current person
+    const shared = await db.get(`SELECT 1 AS x FROM trips t LEFT JOIN requests r ON r.trip_id=t.id
+      WHERE (t.owner_id=? OR r.friend_id=?) AND (t.owner_id=? OR r.friend_id=?) LIMIT 1`, cur.id, cur.id, u.id, u.id);
+    if (!shared && u.id !== cur.id) throw new Rule("No such user", 404);
+    return json({ user: u }, 200, setSid(req, await newSession(u.id)));
+  });
 
   on("POST", "/api/trips", async (req) => {
     const u = await needMe(req); const b = await body(req);
     const place = PLACES.find((p) => p.code === b.city_code); const home = HOMES.find((h) => h.code === b.home_code) || HOMES[0];
     if (!place) throw new Rule("Pick a city", 400);
     if (!b.depart || !b.ret || b.ret < b.depart) throw new Rule("Check the dates", 400);
-    return { trip: await T.createTrip(u, { home: home.city, home_code: home.code, city: place.city, city_code: place.code, currency: place.cur, depart: b.depart, ret: b.ret, fee: toMinor(b.fee || 0, place.cur), payee_email: (b.payee_email || "").trim() || null }) };
+    return { trip: await T.createTrip(u, { home: home.city, home_code: home.code, city: place.city, city_code: place.code, currency: place.cur, depart: b.depart, ret: b.ret, fee: b.fee === "" || b.fee == null ? 0 : Number.isFinite(Number(b.fee)) ? toMinor(Number(b.fee), place.cur) : NaN, payee_email: (b.payee_email || "").trim() || null }) };
   });
   on("GET", "/api/trips/:tid", async (req, p) => T.view(await needTrip(p.tid), await needMe(req)));
   on("GET", "/api/join/:code", async (_req, p) => {
@@ -68,6 +84,7 @@ export function makeApi(db, { saveImage } = {}) {
   on("POST", "/api/trips/:tid/receipt", async (req, p) => {
     const t = await needTrip(p.tid); const u = await needMe(req);
     if (t.owner_id !== u.id) throw new Rule("Only the traveller", 403);
+    if (t.status !== "shopping") throw new Rule("Scan the receipt while shopping");
     const b = await body(req, 12e6);
     if (!/^data:image\/(png|jpe?g|webp);base64,/.test(b.image || "")) throw new Rule("Send a photo", 400);
     const reqs = await T.markable(t.id);
@@ -85,6 +102,14 @@ export function makeApi(db, { saveImage } = {}) {
     const names = new Map();
     for (const x of plan) if (!names.has(x.r.friend_id)) names.set(x.r.friend_id, (await T.user(x.r.friend_id)).name);
     return { receipt: rid, shop: read.shop, lines, plan: plan.map((x) => ({ id: x.r.id, charge: x.charge, line: x.line, why: x.why, over: x.over, hold: x.r.hold, title: x.r.swap_title || x.r.title, friend: names.get(x.r.friend_id) })) };
+  });
+  on("POST", "/api/trips/:tid/finish", async (req, p) => ({ results: await T.finishEmpty(await needTrip(p.tid), await needMe(req)) }));
+  on("POST", "/api/trips/:tid/retry", async (req, p) => {
+    const t = await needTrip(p.tid); const u = await needMe(req);
+    if (t.status !== "settling" || !t.receipt_id) throw new Rule("Nothing to retry");
+    const rc = await T.receipt(t.receipt_id, t.id);
+    const plan = await T.planSettlement(t, { lines: JSON.parse(rc.lines), matches: JSON.parse(rc.matches) });
+    return { results: await T.settle(t, u, plan, rc.id) };
   });
   on("POST", "/api/trips/:tid/settle", async (req, p) => {
     const t = await needTrip(p.tid); const u = await needMe(req); const b = await body(req);

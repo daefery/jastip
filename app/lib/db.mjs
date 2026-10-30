@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS trips (
   home TEXT NOT NULL, home_code TEXT NOT NULL, city TEXT NOT NULL, city_code TEXT NOT NULL,
   currency TEXT NOT NULL, depart TEXT NOT NULL, ret TEXT NOT NULL,
   fee INTEGER NOT NULL, payee_email TEXT,
-  shop_day TEXT, status TEXT NOT NULL DEFAULT 'open',
+  shop_day TEXT, status TEXT NOT NULL DEFAULT 'open', receipt_id TEXT,
   invite TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS requests (
@@ -30,6 +30,9 @@ CREATE TABLE IF NOT EXISTS receipts (
 CREATE TABLE IF NOT EXISTS events (
   id INTEGER PRIMARY KEY AUTOINCREMENT, trip_id TEXT NOT NULL, request_id TEXT,
   kind TEXT NOT NULL, label TEXT NOT NULL, detail TEXT, ok INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS sessions (
+  token TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS req_trip ON requests(trip_id);
 CREATE INDEX IF NOT EXISTS req_friend ON requests(friend_id);
@@ -54,6 +57,8 @@ export async function nodeSqlite(file) {
   db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;" + SCHEMA);
   const cols = db.prepare("PRAGMA table_info(requests)").all().map((c) => c.name);
   if (!cols.includes("rule")) db.exec("ALTER TABLE requests ADD COLUMN rule TEXT NOT NULL DEFAULT 'ask'");
+  const tcols = db.prepare("PRAGMA table_info(trips)").all().map((c) => c.name);
+  if (!tcols.includes("receipt_id")) db.exec("ALTER TABLE trips ADD COLUMN receipt_id TEXT");
   const norm = (a) => a.map((x) => (x === undefined ? null : x));
   return {
     get: async (sql, ...a) => db.prepare(sql).get(...norm(a)) ?? null,
