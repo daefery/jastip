@@ -46,7 +46,7 @@ export function receiptFlow(v, done) {
         const out = await api(`/api/trips/${t.id}/settle`, { body: { receipt: r.receipt } });
         const bad = out.results.filter((x) => x.error);
         s.close();
-        toast(bad.length ? `${bad.length} payment${bad.length > 1 ? "s" : ""} didn't go through. Retry from the trip.` : "Charged exactly. Holds released.", bad.length ? "err" : "ok");
+        toast(bad.length ? `${bad.length} PayPal step${bad.length > 1 ? "s" : ""} didn't go through. Retry from the trip.` : "Charged exactly. Holds released.", bad.length ? "err" : "ok");
         done();
       } catch (er) { busy(e.currentTarget, false); toast(er.message, "err"); }
     };

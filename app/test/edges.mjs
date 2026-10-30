@@ -4,14 +4,14 @@ import { nodeSqlite } from "../lib/db.mjs";
 import { makeTrips } from "../lib/trips.mjs";
 
 const res = []; const ok = (c, w, x = "") => { res.push(!!c); console.log(`${c ? "PASS" : "FAIL"}  ${w}${x ? "  " + x : ""}`); };
-const failCapture = new Set();
+const failCapture = new Set(), failVoid = new Set();
 let n = 0;
 const pp = {
   fake: () => true, paypalReady: () => true,
   createHold: async () => ({ orderId: `O${++n}`, approve: "x" }),
   authorizeOrder: async () => ({ authId: `A${++n}`, status: "CREATED" }),
   capture: async (authId) => { if (failCapture.has(authId)) throw new Error("PayPal 503"); return { captureId: `C${++n}`, status: "COMPLETED" }; },
-  voidHold: async () => ({ status: "VOIDED" }),
+  voidHold: async (authId) => { if (failVoid.has(authId)) throw new Error("PayPal 503 on void"); return { status: "VOIDED" }; },
 };
 const db = await nodeSqlite(":memory:");
 const T = makeTrips(db, pp);
@@ -72,7 +72,7 @@ const hold = async (tid, p) => { await T.startHold(await tripOf(tid), p.f, p.r.i
   ok(out.some((x) => x.error) && (await tripOf(tid)).status === "settling", "failed capture: trip stays 'settling'");
   ok((await status(people[0].r.id)) === "found" && (await status(people[1].r.id)) === "settled", "failed item still held, other item charged");
   failCapture.clear();
-  const out2 = await T.settle(await tripOf(tid), dina, await T.planSettlement(await tripOf(tid), read), "RC1");
+  const out2 = await T.retry(await tripOf(tid), dina);
   ok(out2.length === 1 && out2[0].id === people[0].r.id && out2[0].charged === 1288 && (await tripOf(tid)).status === "settled", "retry charges only the failed item, then settles", JSON.stringify(out2));
   const b = await T.request(people[1].r.id);
   ok(b.status === "settled" && b.charged === 1100, "already-paid item untouched by retry");
@@ -110,5 +110,75 @@ const hold = async (tid, p) => { await T.startHold(await tripOf(tid), p.f, p.r.i
   try { await T.createTrip(u, { ...base, fee: -5 }); } catch (x) { e1 = x; }
   try { await T.createTrip(u, { ...base, fee: 100, payee_email: "not-an-email" }); } catch (x) { e2 = x; }
   ok(e1?.code === 400 && e2?.code === 400, "negative fee and bad PayPal email are refused");
+}
+
+async function shopping(names) {
+  const s = await setup(names);
+  for (const p of s.people) await T.decide(await tripOf(s.tid), s.dina, p.r.id, true);
+  await T.setShopDay(await tripOf(s.tid), s.dina, "Mon");
+  for (const p of s.people) await hold(s.tid, p);
+  await T.startShopping(await tripOf(s.tid), s.dina);
+  return s;
+}
+// 6. duplicate receipt line: retry keeps the void a void (round 2 #16)
+{
+  const { dina, tid, people } = await shopping([["Ayu", 1500], ["Bima", 1500]]);
+  for (const p of people) await T.mark(await tripOf(tid), dina, p.r.id, "found");
+  const rb = await T.request(people[1].r.id); failVoid.add(rb.auth_id);
+  const read = { lines: [{ n: 1, text: "KitKat", price: 800 }], matches: [{ request_id: people[0].r.id, line_n: 1 }, { request_id: people[1].r.id, line_n: 1 }] };
+  const out = await T.settle(await tripOf(tid), dina, await T.planSettlement(await tripOf(tid), read), "RC2");
+  ok(out.find((x) => x.id === people[0].r.id)?.charged === 900 && out.find((x) => x.id === people[1].r.id)?.error, "same line twice: first charged, second's void failed");
+  failVoid.clear();
+  const out2 = await T.retry(await tripOf(tid), dina);
+  ok(out2.length === 1 && out2[0].released === 1600 && (await T.request(people[1].r.id)).charged === 0, "retry voids it again, never charges it", JSON.stringify(out2));
+}
+// 7. checkout with an item still 'held' (not marked): its failed void stays visible + retryable (#17)
+{
+  const { dina, tid, people } = await shopping([["Ayu", 1500], ["Bima", 1300]]);
+  await T.mark(await tripOf(tid), dina, people[0].r.id, "found");
+  const rb = await T.request(people[1].r.id); failVoid.add(rb.auth_id);
+  const read = { lines: [{ n: 1, text: "KitKat", price: 1188 }], matches: [{ request_id: people[0].r.id, line_n: 1 }] };
+  await T.settle(await tripOf(tid), dina, await T.planSettlement(await tripOf(tid), read), "RC3");
+  const rb2 = await T.request(people[1].r.id);
+  ok((await tripOf(tid)).status === "settling" && rb2.status === "held" && rb2.plan_op === "void", "unmarked item: failed void saved as an open 'void' step");
+  failVoid.clear();
+  await T.retry(await tripOf(tid), dina);
+  ok((await T.request(people[1].r.id)).status === "released" && (await tripOf(tid)).status === "settled", "retry releases it, trip settles");
+}
+// 8. nothing found + failed void: finish -> settling -> retry works without a receipt (#1)
+{
+  const { dina, tid, people } = await shopping([["Ayu", 1200], ["Bima", 1300]]);
+  for (const p of people) await T.mark(await tripOf(tid), dina, p.r.id, "not_found");
+  failVoid.add((await T.request(people[0].r.id)).auth_id);
+  const out = await T.finishEmpty(await tripOf(tid), dina);
+  ok(out.filter((x) => x.error).length === 1 && (await tripOf(tid)).status === "settling", "finish with a failed void: trip stays settling");
+  failVoid.clear();
+  const out2 = await T.retry(await tripOf(tid), dina);
+  ok(out2.length === 1 && out2[0].released && (await tripOf(tid)).status === "settled", "receipt-free retry releases only the failed one", JSON.stringify(out2));
+}
+// 9. late PayPal return after shopping started never resurrects the ask (#18)
+{
+  const s = await setup([["Ayu", 1200], ["Late", 900]]);
+  for (const p of s.people) await T.decide(await tripOf(s.tid), s.dina, p.r.id, true);
+  await T.setShopDay(await tripOf(s.tid), s.dina, "Mon");
+  await hold(s.tid, s.people[0]);
+  await T.startHold(await tripOf(s.tid), s.people[1].f, s.people[1].r.id, "http://x"); // opened PayPal, didn't finish
+  await T.startShopping(await tripOf(s.tid), s.dina);
+  let e; try { await T.finishHold(s.people[1].r.id); } catch (x) { e = x; }
+  const late = await T.request(s.people[1].r.id);
+  ok(e && late.status === "dropped" && !late.auth_id, "late return during shopping: refused, stays dropped, no auth", late.status);
+  await T.mark(await tripOf(s.tid), s.dina, s.people[0].r.id, "not_found");
+  await T.finishEmpty(await tripOf(s.tid), s.dina);
+  let e2; try { await T.finishHold(s.people[1].r.id); } catch (x) { e2 = x; }
+  ok(e2 && (await T.request(s.people[1].r.id)).status === "dropped", "late return after finishing: refused");
+}
+// 10. double settle tap can't save two plans
+{
+  const { dina, tid, people } = await shopping([["Ayu", 1500]]);
+  await T.mark(await tripOf(tid), dina, people[0].r.id, "found");
+  const read = { lines: [{ n: 1, text: "KitKat", price: 1188 }], matches: [{ request_id: people[0].r.id, line_n: 1 }] };
+  const t1 = await tripOf(tid), plan = await T.planSettlement(t1, read);
+  const both = await Promise.allSettled([T.settle(t1, dina, plan, "A"), T.settle(t1, dina, plan, "B")]);
+  ok(both.filter((x) => x.status === "fulfilled").length === 1 && (await T.request(people[0].r.id)).charged === 1288, "two settle taps at once: one runs, one is refused");
 }
 console.log(`\n${res.filter(Boolean).length}/${res.length} passed`); process.exit(res.every(Boolean) ? 0 : 1);

@@ -1,7 +1,7 @@
 // The tracker. Friend = an order (Uber Eats). Traveller = courier mode (Instacart Shopper).
 // Every number is from the server; every money move goes through the API (PayPal on the server).
 import { api, ic, esc, av, toast, busy, sheet, pic, qrSvg, dateRange, when } from "../ui.js";
-import { topbar, store } from "../app.js";
+import { topbar, store, owns } from "../app.js";
 import { sceneHTML, skyOf } from "../scenes.js";
 import { fmt } from "../money.js";
 import { receiptFlow } from "./receipt.js";
@@ -10,13 +10,15 @@ const STEPS = ["Asked", "Held", "Shopping", "Paid", "Delivered"];
 let token = 0, poll;
 
 export async function tripView(app, tid, { rid, params }) {
-  const my = ++token;
+  const my = ++token, route = store.route;
   const v = await api(`/api/trips/${tid}`);
-  if (my !== token) return;
+  if (my !== token || !owns(route)) return;
   if (params.get("held")) toast("Hold approved. ¥0 charged.".replace("¥", v.trip.currency === "JPY" ? "¥" : ""));
-  if (params.get("holdfail")) toast("PayPal didn't approve the hold", "err");
+  if (params.get("holdfail")) toast(params.get("why") || "PayPal didn't approve the hold", "err");
   if ([...params.keys()].length) history.replaceState(null, "", `#/trip/${tid}${rid ? `/r/${rid}` : ""}`);
-  const ctx = { app, v, cur: v.trip.currency, reload: () => tripView(app, tid, { rid, params: new URLSearchParams() }) };
+  // reload only while this route still owns the page; errors become a toast, never an unhandled rejection
+  const reload = () => owns(route) ? tripView(app, tid, { rid, params: new URLSearchParams() }).catch((e) => owns(route) && toast(e.message, "err")) : Promise.resolve();
+  const ctx = { app, v, cur: v.trip.currency, reload };
   if (v.mine) courier(ctx, params.get("share") === "1");
   else order(ctx, rid);
   watch(ctx);
@@ -120,7 +122,12 @@ function order({ app, v, cur, reload }, rid) {
 
   const on = (sel, fn) => app.querySelectorAll(sel).forEach((b) => b.addEventListener("click", () => fn(b)));
   const act = async (b, fn, ok) => { busy(b, true); try { await fn(); if (ok) toast(ok); reload(); } catch (e) { busy(b, false); toast(e.message, "err"); } };
-  on("[data-withdraw]", (b) => act(b, async () => { await api(`/api/requests/${r.id}`, { method: "DELETE" }); location.hash = "#/"; }, "Ask withdrawn"));
+  on("[data-withdraw]", async (b) => {
+    if (!confirm("Withdraw this ask?")) return;
+    busy(b, true);
+    try { await api(`/api/requests/${r.id}`, { method: "DELETE" }); toast("Ask withdrawn"); location.hash = "#/"; }
+    catch (e) { busy(b, false); toast(e.message, "err"); }
+  });
   on("[data-hold]", () => holdSheet(v, r));
   on("[data-swap]", () => swapSheet(v, r, reload));
   on("[data-got]", (b) => gotSheet(v, r, reload));
@@ -210,8 +217,8 @@ function courier({ app, v, cur, reload }, openShare) {
     action = `<button class="btn dark" data-shop ${held.length ? "" : "disabled"}>${ic("bag")}Start shopping${held.length ? ` · ${held.length}` : ""}</button>`;
   } else if (t.status === "settling") {
     n = 3; scene = "paid"; eta = "Payment problem";
-    const stuck = by("found", "swapped", "not_found");
-    title = `${stuck.length} payment${stuck.length > 1 ? "s" : ""} didn't go through`;
+    const stuck = by("held", "found", "swap_asked", "swapped", "not_found");
+    title = `${stuck.length} PayPal step${stuck.length === 1 ? "" : "s"} didn't go through`;
     sub = "PayPal didn't confirm these. The holds are still in place. Retry, nothing is charged twice.";
     action = `<button class="btn dark" data-retry>${ic("lock")}Retry failed payments</button>`;
   } else if (t.status === "shopping") {
@@ -243,7 +250,7 @@ function courier({ app, v, cur, reload }, openShare) {
       + group("Still looking", by("held"), (r) => `<div class="tbtn-row"><button class="tbtn" data-more="${r.id}" aria-label="More for ${esc(r.title)}">${ic("more")}</button><button class="tbtn blue" data-mark="${r.id}" data-w="found" aria-label="Found ${esc(r.title)}">${ic("check")}<span class="lbl">Found</span></button></div>`)
       + group("Not here", by("not_found"), (r) => `<button class="tbtn x" data-mark="${r.id}" data-w="held">Undo</button>`);
   } else if (t.status === "settling") {
-    body = group("Not confirmed yet", by("found", "swapped", "not_found"), (r) => `<span class="rt num" style="color:var(--red)">${fmt(r.hold, cur)}<small>still held</small></span>`)
+    body = group("Not confirmed yet", by("held", "found", "swap_asked", "swapped", "not_found"), (r) => `<span class="rt num" style="color:var(--red)">${r.plan_op === "capture" ? fmt(r.plan_charge, cur) : fmt(0, cur)}<small>${r.plan_op === "capture" ? "to charge" : `release ${fmt(r.hold, cur)}`} · held</small></span>`)
       + group("Done", [...paid, ...rel], (r) => `<span class="rt num" style="color:${r.charged ? "var(--green)" : "var(--l2)"}">${fmt(r.charged || 0, cur)}<small>${r.charged ? "charged" : "released"}</small></span>`);
   } else {
     body = group("Paid", paid, (r) => `<span class="rt num" style="color:var(--green)">${fmt(r.charged, cur)}<small>${r.status === "delivered" ? "delivered" : "to hand over"}</small></span>`)
@@ -284,12 +291,22 @@ function courier({ app, v, cur, reload }, openShare) {
   on("[data-decline]", (b) => act(b, () => api(`/api/requests/${b.dataset.decline}/decide`, { body: { accept: false } }), "Declined"));
   on("[data-acceptall]", (b) => act(b, async () => { for (const r of asked) await api(`/api/requests/${r.id}/decide`, { body: { accept: true } }); }, `Accepted ${asked.length}`));
   on("[data-day]", () => daySheet(v, reload));
-  on("[data-shop]", (b) => act(b, () => api(`/api/trips/${t.id}/shop`, { body: {} }), "Have fun shopping"));
+  on("[data-shop]", (b) => {
+    const left = [...asked, ...acc];
+    if (left.length && !confirm(`${left.length} ask${left.length > 1 ? "s" : ""} without a hold will be left out:\n${left.map((r) => `· ${r.friend.name}: ${r.title}`).join("\n")}\n\nNothing is held or charged for them. Start shopping?`)) return;
+    act(b, () => api(`/api/trips/${t.id}/shop`, { body: {} }), "Have fun shopping");
+  });
   on("[data-mark]", (b) => act(b, () => api(`/api/requests/${b.dataset.mark}/mark`, { body: { what: b.dataset.w } })));
   on("[data-more]", (b) => moreSheet(v, rs.find((r) => r.id === b.dataset.more), reload));
   on("[data-receipt]", () => receiptFlow(v, reload));
-  on("[data-finish]", (b) => { if (confirm(`Release every hold? Nothing will be charged.`)) act(b, () => api(`/api/trips/${t.id}/finish`, { body: {} }), "All holds released"); });
-  on("[data-retry]", (b) => act(b, async () => { const o = await api(`/api/trips/${t.id}/retry`, { body: {} }); const bad = o.results.filter((x) => x.error).length; if (bad) throw new Error(`${bad} still failing. Try again in a minute.`); }, "Payments confirmed"));
+  const payAct = (b, path, okMsg) => act(b, async () => {
+    const o = await api(`/api/trips/${t.id}/${path}`, { body: {} });
+    const bad = o.results.filter((x) => x.error).length;
+    if (bad) { toast(`${bad} didn't go through. The hold${bad > 1 ? "s are" : " is"} still in place. Retry in a minute.`, "err"); return; }
+    toast(okMsg);
+  });
+  on("[data-finish]", (b) => { if (confirm(`Release every hold? Nothing will be charged.`)) payAct(b, "finish", "All holds released"); });
+  on("[data-retry]", (b) => payAct(b, "retry", "Payments confirmed"));
   on("[data-qr]", () => handoverSheet(v));
   if (openShare) shareSheet(v);
 }

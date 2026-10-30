@@ -11,6 +11,12 @@ const cookieOf = (req, k) => (req.headers.get("cookie") || "").split(/;\s*/).map
 const secure = (req) => new URL(req.url).protocol === "https:" ? "; Secure" : "";
 const setSid = (req, sid) => ({ "Set-Cookie": `jt_sid=${sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000${secure(req)}` });
 // Demo switching (one device acting as several people) only when the server says so (DEMO_SWITCH=1).
+// Fee is checked as typed, before rounding to minor units (so -0.1 is refused, not rounded to 0).
+const feeOf = (v, cur) => {
+  const n = v === "" || v == null ? 0 : Number(v);
+  if (!Number.isFinite(n) || n < 0) throw new Rule("Fee must be zero or more", 400);
+  return toMinor(n, cur);
+};
 const demoSwitch = () => env("DEMO_SWITCH") === "1";
 
 export function makeApi(db, { saveImage } = {}) {
@@ -49,7 +55,7 @@ export function makeApi(db, { saveImage } = {}) {
     const place = PLACES.find((p) => p.code === b.city_code); const home = HOMES.find((h) => h.code === b.home_code) || HOMES[0];
     if (!place) throw new Rule("Pick a city", 400);
     if (!b.depart || !b.ret || b.ret < b.depart) throw new Rule("Check the dates", 400);
-    return { trip: await T.createTrip(u, { home: home.city, home_code: home.code, city: place.city, city_code: place.code, currency: place.cur, depart: b.depart, ret: b.ret, fee: b.fee === "" || b.fee == null ? 0 : Number.isFinite(Number(b.fee)) ? toMinor(Number(b.fee), place.cur) : NaN, payee_email: (b.payee_email || "").trim() || null }) };
+    return { trip: await T.createTrip(u, { home: home.city, home_code: home.code, city: place.city, city_code: place.code, currency: place.cur, depart: b.depart, ret: b.ret, fee: feeOf(b.fee, place.cur), payee_email: (b.payee_email || "").trim() || null }) };
   });
   on("GET", "/api/trips/:tid", async (req, p) => T.view(await needTrip(p.tid), await needMe(req)));
   on("GET", "/api/join/:code", async (_req, p) => {
@@ -104,13 +110,7 @@ export function makeApi(db, { saveImage } = {}) {
     return { receipt: rid, shop: read.shop, lines, plan: plan.map((x) => ({ id: x.r.id, charge: x.charge, line: x.line, why: x.why, over: x.over, hold: x.r.hold, title: x.r.swap_title || x.r.title, friend: names.get(x.r.friend_id) })) };
   });
   on("POST", "/api/trips/:tid/finish", async (req, p) => ({ results: await T.finishEmpty(await needTrip(p.tid), await needMe(req)) }));
-  on("POST", "/api/trips/:tid/retry", async (req, p) => {
-    const t = await needTrip(p.tid); const u = await needMe(req);
-    if (t.status !== "settling" || !t.receipt_id) throw new Rule("Nothing to retry");
-    const rc = await T.receipt(t.receipt_id, t.id);
-    const plan = await T.planSettlement(t, { lines: JSON.parse(rc.lines), matches: JSON.parse(rc.matches) });
-    return { results: await T.settle(t, u, plan, rc.id) };
-  });
+  on("POST", "/api/trips/:tid/retry", async (req, p) => ({ results: await T.retry(await needTrip(p.tid), await needMe(req)) }));
   on("POST", "/api/trips/:tid/settle", async (req, p) => {
     const t = await needTrip(p.tid); const u = await needMe(req); const b = await body(req);
     const rc = await T.receipt(b.receipt, t.id);
@@ -124,7 +124,7 @@ export function makeApi(db, { saveImage } = {}) {
     const r = rid ? await T.request(rid) : null;
     if (!r) return Response.redirect(new URL("/", url).toString(), 302);
     try { await T.finishHold(rid); return Response.redirect(new URL(`/#/trip/${r.trip_id}?held=${rid}`, url).toString(), 302); }
-    catch (e) { await T.log(r.trip_id, rid, "paypal", "AUTHORIZE failed", e.message, 0); return Response.redirect(new URL(`/#/trip/${r.trip_id}?holdfail=${rid}`, url).toString(), 302); }
+    catch (e) { await T.log(r.trip_id, rid, "paypal", "AUTHORIZE failed", e.message, 0); return Response.redirect(new URL(`/#/trip/${r.trip_id}?holdfail=${rid}&why=${encodeURIComponent(e instanceof Rule ? e.message : "PayPal didn't approve the hold")}`, url).toString(), 302); }
   }
 
   // Returns a Response for API/PayPal routes, or null so the caller serves static files.

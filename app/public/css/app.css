@@ -353,3 +353,7 @@ input[type=date].input{padding:0 10px;font-size:16px}
 .actbar .btn.light{height:46px;font-size:15px}
 /* shopping mode on phones: smaller scene so the list gets the room */
 @media (max-width:699px){.trk.shop>.scene{height:clamp(120px,18dvh,170px)}}
+.ferr{display:block;font-style:normal;font-size:13px;color:var(--red);min-height:0;margin-top:4px}
+.ferr:empty{display:none}
+.input[aria-invalid="true"]{box-shadow:inset 0 0 0 2px var(--red)}
+.jr b.wrap2{display:-webkit-box}

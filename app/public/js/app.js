@@ -6,7 +6,9 @@ import { tripView } from "./screens/trip.js";
 import { joinView } from "./screens/join.js";
 import { newTripView } from "./screens/new.js";
 
-export const store = { me: null, config: null, mine: [], joined: [] };
+export const store = { me: null, config: null, mine: [], joined: [], route: 0 };
+// Every navigation bumps the route number. Async work captures it and checks owns() before painting.
+export const owns = (n) => n === store.route;
 const app = document.getElementById("app");
 
 export async function refreshMe() {
@@ -52,7 +54,8 @@ function friendStatus(sum, t) {
   if (sum.swaps) return ["Pick a swap", "orange"];
   if (sum.toHold && t.status === "holds") return ["Approve hold", "orange"];
   if (sum.toConfirm) return ["Got it?", "orange"];
-  if (t.status === "settled") return sum.charged ? ["Paid", "green"] : ["Released", "gray"];
+  if (t.status === "settled" || t.status === "settling") return sum.charged ? ["Paid", "green"] : sum.released ? ["Released", "gray"] : ["Not included", "gray"];
+  if (sum.out === sum.count) return ["Not included", "gray"];
   if (t.status === "shopping") return ["Shopping", "orange"];
   if (sum.held) return ["Held", "blue"];
   return ["Asked", "gray"];
@@ -102,6 +105,7 @@ function meSheet() {
 }
 
 export async function route() {
+  const my = ++store.route;
   closeAllSheets();
   const [path, qs] = (location.hash.slice(1) || "/").split("?");
   const params = new URLSearchParams(qs || "");
@@ -113,8 +117,8 @@ export async function route() {
     if (parts[0] === "new") newTripView(app);
     else if (parts[0] === "trip") await tripView(app, parts[1], { rid: parts[2] === "r" ? parts[3] : null, params });
     else home();
-  } catch (e) { toast(e.message, "err"); if (e.status === 404) location.hash = "#/"; }
-  scrollTo({ top: 0 });
+  } catch (e) { if (!owns(my)) return; toast(e.message, "err"); if (e.status === 404) location.hash = "#/"; }
+  if (owns(my)) scrollTo({ top: 0 });
 }
 
 document.addEventListener("click", (e) => { if (e.target.closest("[data-me]")) meSheet(); });
