@@ -45,7 +45,9 @@ Workers AI binding, `server.mjs` gives it `node:sqlite` and an OpenAI-compatible
 6. **Scan receipt** → **Use sample receipt** → check the charges → **Charge**.
 7. Friend: see the exact charge and the part of the hold never taken; tap **I got it**.
 
-Me → **Switch person** lets one browser act as each person for a demo.
+For a demo on one device, start the server with `DEMO_SWITCH=1` (`scripts/serve.sh` does this):
+Me → **Switch person** then lets one browser act as anyone who shares a trip with you. Without
+the flag the switch endpoint returns 404.
 
 ## PayPal
 
@@ -86,9 +88,14 @@ On the live site one full receipt read took 11.6 s. Locally we used Gemini 3.8 F
 
 Also shown: Indonesia's USD 500 duty-free limit per arrival, and how many handovers each person has kept.
 
+Also handled: if nothing was found, **Finish trip** voids every hold with no receipt. If PayPal
+fails on a capture or void, the trip stays in a "payment problem" state, the hold stays in place,
+and **Retry failed payments** retries only those items. Only the traveller and friends with an
+ask can open a trip; the full receipt is shown to the traveller only.
+
 **Not covered yet:** a friend filing a false "not received" dispute after the handover (the handover
 confirmation and receipt are kept as evidence, but the Disputes API is not wired up), account takeover,
-and hosted multi-user sign-in (names only, cookie session).
+and real sign-in (names only; the cookie is a random session token, so it can't be guessed from a user id).
 
 ## Tests
 
@@ -108,8 +115,11 @@ Checked afterwards directly against PayPal's API (not our database):
 scripts/serve.sh 5180           # real PayPal sandbox
 SANDBOX_BUYER_EMAIL=... SANDBOX_BUYER_PASSWORD=... npm test
 
-scripts/serve.sh 5181 fake      # PayPal test mode (no network), for UI screenshots
-node test/shots-late.mjs 390x844
+scripts/serve.sh 5181 fake      # PayPal test mode (no PayPal calls), real AI
+node --no-warnings test/rules.mjs     # sold-out rules
+node test/ui-flow.mjs 390x844         # full 4-person flow in a browser, screenshots in shots/flow-390/
+node test/ui-edges.mjs                # edge journeys in a browser (nothing found, late asks, privacy, keyboard)
+node --no-warnings test/edges.mjs     # no server: PayPal failure + retry, privacy, validation
 ```
 
 ## License
