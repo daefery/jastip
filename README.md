@@ -4,7 +4,7 @@ Working name. A traveller buys things abroad for friends. Each friend approves a
 to their price cap, the traveller photographs one shop receipt, and each friend is charged their
 exact share when they receive the item. Items not found are released straight away.
 
-Status: risk spikes (30 Oct 2026). No app yet.
+Status: risk spikes (30 Oct 2026). Spike 1 passed in sandbox. No app yet.
 
 ## Spike 1: PayPal holds (`spikes/paypal-holds.mjs`)
 
@@ -18,7 +18,26 @@ node spikes/paypal-holds.mjs --currency USD
 ```
 
 The script prints three approval links. Open each one logged in as the sandbox Personal (buyer)
-account, approve, then press Enter. Result: not run yet (no sandbox credentials on this machine).
+account, approve, then press Enter.
+
+Result, 30 Oct 2026, JPY, buyer = sandbox Personal account with country ID (Indonesia),
+log in `spikes/results-2026-10-30T02-48-51-848Z.json` (not committed):
+
+| Friend | Hold | Action | PayPal result |
+|---|---|---|---|
+| Ayu | ¥1,500 | capture exact share ¥1,188, final | 201 COMPLETED, auth CAPTURED, fee ¥80, net USD 6.83 |
+| Bima | ¥1,800 | void (item not found) | 200 VOIDED |
+| Citra | ¥1,200 | reauthorize on day 1 | 422 `REAUTHORIZATION_TOO_SOON` |
+| Citra | ¥1,200 | then capture ¥968, final | 201 COMPLETED, auth CAPTURED, fee ¥73, net USD 5.51 |
+
+Findings:
+- Capturing less than the hold works in JPY; partial capture was already on for the sandbox account.
+- An Indonesian buyer account can approve a JPY hold.
+- The API error says reauthorize is allowed **once**, from day 4 to day 29: "A reauthorization is
+  only allowed once from Day 4 to Day 29 since the date of the original authorization." The docs
+  page says "multiple". Design for one reauthorize, so a hold opens on the shopping day, not at trip booking.
+- PayPal took ¥80 on ¥1,188 (6.7%) and ¥73 on ¥968 (7.5%) in fees, and converted the rest to the
+  merchant account's USD. The jastip fee has to cover this.
 
 Facts from PayPal docs, checked 30 Oct 2026 ([auth and honor period](https://developer.paypal.com/payment-methods/auth-honor),
 [reauthorize](https://developer.paypal.com/api/payments/v2/authorizations-reauthorize),
