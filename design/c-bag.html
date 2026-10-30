@@ -1,0 +1,68 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css">
+<style>
+/* C · BAG — playful and physical, like Apple Fitness rings / Weather: a shopping bag fills as items are found,
+   a live "money meter" shows held vs exact. Bright, tactile, big numbers, few words. */
+.ph{background:linear-gradient(180deg,#fff5ea 0%,#fff 46%);color:#1c1c1e}
+.scr{position:absolute;inset:0;padding:60px 20px 0}
+.trip{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px;color:#ff6a00}
+.trip .flag{width:26px;height:26px;border-radius:99px;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.12);display:grid;place-items:center;font-size:11px;color:#c00}
+h1{font-size:30px;line-height:1.1;letter-spacing:-.02em;margin:8px 0 18px}
+.prod{display:flex;gap:16px;align-items:center;padding:16px;border-radius:24px;background:#fff;box-shadow:0 10px 30px -14px rgba(255,106,0,.45)}
+.pic{width:84px;height:84px;border-radius:20px;background:linear-gradient(160deg,#9fe08a,#2f9e44);display:grid;place-items:center;color:#fff;font-weight:800;font-size:12px;text-align:center}
+.prod b{font-size:19px}.prod span{display:block;font-size:14px;color:#8e8e93}
+.dial{margin:22px auto 6px;width:240px;height:130px;position:relative}
+.dial svg{width:240px;height:130px}
+.dial .v{position:absolute;left:0;right:0;bottom:6px;text-align:center}
+.dial .v b{display:block;font:800 40px ui-rounded,-apple-system,"Ubuntu Sans";letter-spacing:-.02em}
+.dial .v span{font-size:13px;color:#8e8e93}
+.minmax{display:flex;justify-content:center;gap:14px;margin:6px 0 18px}
+.minmax span{width:56px;height:44px;border-radius:14px;background:#fff;box-shadow:0 4px 14px rgba(0,0,0,.08);display:grid;place-items:center;font-size:24px;font-weight:600}
+.pp{display:flex;align-items:center;justify-content:center;gap:8px;height:58px;border-radius:29px;background:#ffc439;font-weight:700;font-size:17px;box-shadow:0 12px 24px -12px rgba(255,170,0,.9)}
+.pp b{font:800 italic 19px Verdana;color:#003087}.pp b i{color:#0070e0}
+.fine{text-align:center;font-size:13px;color:#8e8e93;margin-top:10px}
+/* traveller */
+.bag{position:relative;width:200px;height:210px;margin:6px auto 0}
+.bag .body{position:absolute;left:10px;right:10px;bottom:0;height:170px;border-radius:14px 14px 30px 30px;background:linear-gradient(#ff8a2b,#ff6a00);overflow:hidden;box-shadow:0 20px 40px -18px rgba(255,106,0,.9)}
+.bag .handle{position:absolute;left:60px;right:60px;top:0;height:60px;border:9px solid #ff6a00;border-bottom:0;border-radius:40px 40px 0 0}
+.bag .items{position:absolute;left:18px;right:18px;top:16px;display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.bag .it{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;color:#fff;font-weight:800;font-size:13px;border:2px solid rgba(255,255,255,.7)}
+.bag .count{position:absolute;bottom:14px;left:0;right:0;text-align:center;color:#fff;font:800 34px ui-rounded,-apple-system,"Ubuntu Sans"}
+.who{display:flex;flex-direction:column;gap:10px;margin-top:18px}
+.w{display:grid;grid-template-columns:34px 1fr auto;gap:10px;align-items:center}
+.w .av{width:34px;height:34px;border-radius:99px;color:#fff;font-weight:700;display:grid;place-items:center}
+.meter{position:relative;height:12px;border-radius:9px;background:#f2f2f7;overflow:hidden}
+.meter i{position:absolute;left:0;top:0;bottom:0;border-radius:9px;background:#34c759}
+.meter u{position:absolute;top:0;bottom:0;right:0;background:repeating-linear-gradient(45deg,#e5e5ea 0 4px,#f2f2f7 4px 8px)}
+.w .n{font-size:13px;font-weight:600;color:#8e8e93;margin-bottom:4px}
+.w b{font:700 17px ui-rounded,-apple-system,"Ubuntu Sans"}
+.cta{position:absolute;left:20px;right:20px;bottom:34px;height:58px;border-radius:29px;background:#1c1c1e;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:17px}
+</style></head><body>
+<div class="board-h"><b>C · Bag</b><span>Warm and playful, like Apple Fitness. Big dials and a bag that fills; very few words.</span></div>
+<div class="phones">
+  <div class="ph"><div class="notch"></div><div class="status"><span>9:41</span><span>●●● 100%</span></div>
+    <div class="scr">
+      <div class="trip"><span class="flag">●</span>Dina · Tokyo · Mon 2 Nov</div>
+      <h1>Your hold for<br>Matcha KitKat</h1>
+      <div class="prod"><div class="pic">MATCHA<br>KITKAT</div><div><b>Matcha KitKat</b><span>Big bag · Otona no Amasa</span><span>Usually ~¥1,200</span></div></div>
+      <div class="dial"><svg viewBox="0 0 240 130"><path d="M20 120 A100 100 0 0 1 220 120" fill="none" stroke="#f2e6da" stroke-width="18" stroke-linecap="round"/><path d="M20 120 A100 100 0 0 1 178 46" fill="none" stroke="#ff6a00" stroke-width="18" stroke-linecap="round"/></svg>
+        <div class="v"><b class="num">¥1,500</b><span>your max · + ¥100 fee</span></div></div>
+      <div class="minmax"><span>−</span><span>+</span></div>
+      <div class="pp">Hold <b>Pay<i>Pal</i></b> · ¥0 today</div>
+      <div class="fine">Charged the receipt price on Monday. Not found? Released.</div>
+    </div></div>
+  <div class="ph"><div class="notch"></div><div class="status"><span>9:41</span><span>●●● 100%</span></div>
+    <div class="scr">
+      <div class="trip"><span class="flag">●</span>Don Quijote · Shibuya</div>
+      <h1>3 in the bag.<br>Charge exactly.</h1>
+      <div class="bag"><div class="handle"></div><div class="body"><div class="items"><span class="it" style="background:#2f9e44">A</span><span class="it" style="background:#e09a00">B</span><span class="it" style="background:#2f5fd0">C</span></div><div class="count num">¥3,104</div></div></div>
+      <div class="who">
+        <div class="w"><span class="av" style="background:#ff2d55">A</span><div><div class="n">Ayu · KitKat</div><div class="meter"><i style="width:80%"></i><u style="left:80%"></u></div></div><b class="num">¥1,288</b></div>
+        <div class="w"><span class="av" style="background:#ff9500">B</span><div><div class="n">Bima · Banana 4 pack (swap)</div><div class="meter"><i style="width:39%"></i><u style="left:39%"></u></div></div><b class="num">¥748</b></div>
+        <div class="w"><span class="av" style="background:#5856d6">C</span><div><div class="n">Citra · Hada Labo</div><div class="meter"><i style="width:82%"></i><u style="left:82%"></u></div></div><b class="num">¥1,068</b></div>
+        <div class="w" style="opacity:.55"><span class="av" style="background:#8e8e93">C</span><div><div class="n">Citra · patches · not found</div><div class="meter"><u style="left:0"></u></div></div><b class="num">¥0</b></div>
+      </div>
+      <div class="cta">Charge 3 · release 1</div>
+    </div></div>
+</div>
+<div class="caps"><div class="cap">Friend: set max + hold</div><div class="cap">Traveller: one receipt → exact charges</div></div>
+</body></html>

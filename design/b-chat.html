@@ -1,0 +1,72 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css">
+<style>
+/* B · CHAT — like iMessage: jastip already lives in group chats, so the app IS the chat. Holds, swaps and
+   receipts are interactive bubbles (like Apple Pay in Messages). */
+.ph{background:#fff;color:#000}
+.scr{position:absolute;inset:0;display:flex;flex-direction:column}
+.hd{padding:54px 16px 8px;text-align:center;border-bottom:.5px solid #d1d1d6;background:rgba(249,249,249,.94)}
+.hd .grp{display:flex;justify-content:center;margin-bottom:4px}
+.hd .grp span{width:30px;height:30px;border-radius:99px;margin-left:-8px;border:2px solid #f9f9f9;display:grid;place-items:center;color:#fff;font-size:12px;font-weight:700}
+.hd b{font-size:13px;font-weight:600}
+.hd small{display:block;font-size:11px;color:#8e8e93}
+.msgs{flex:1;padding:10px 12px;display:flex;flex-direction:column;gap:6px;overflow:hidden}
+.from{font-size:11px;color:#8e8e93;margin:6px 0 0 14px}
+.b{max-width:76%;padding:8px 13px;border-radius:19px;font-size:16px;line-height:1.3}
+.in{background:#e9e9eb;align-self:flex-start;border-bottom-left-radius:6px}
+.out{background:#0a84ff;color:#fff;align-self:flex-end;border-bottom-right-radius:6px}
+.app{align-self:flex-end;width:250px;border-radius:18px;overflow:hidden;border:.5px solid #d1d1d6;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.06)}
+.app.l{align-self:flex-start}
+.app .art{height:96px;display:grid;place-items:center;background:linear-gradient(135deg,#e8f5e0,#c9e8b9);font-size:13px;color:#1d6b33;font-weight:700}
+.app .body{padding:10px 12px}
+.app .t{font-weight:600;font-size:15px}
+.app .s{font-size:13px;color:#8e8e93}
+.app .act{display:flex;align-items:center;justify-content:center;gap:6px;height:40px;border-top:.5px solid #d1d1d6;font-weight:600;color:#0a84ff;font-size:15px}
+.app .act.pp{background:#ffc439;color:#111;border:0}
+.app .act.pp b{font:800 italic 15px Verdana;color:#003087}.app .act.pp b i{color:#0070e0}
+.held{display:flex;align-items:center;gap:6px;font-size:12px;color:#0a84ff;font-weight:600;margin-top:4px}
+.bar{display:flex;align-items:center;gap:8px;padding:8px 10px 30px;border-top:.5px solid #d1d1d6}
+.bar .plus{width:34px;height:34px;border-radius:99px;background:#e9e9eb;display:grid;place-items:center;color:#8e8e93}
+.bar .in2{flex:1;height:36px;border-radius:18px;border:.5px solid #c7c7cc;padding:0 14px;display:flex;align-items:center;color:#c7c7cc}
+.rc{padding:10px 12px;font:500 12px/1.55 ui-monospace,"Ubuntu Sans Mono",monospace;background:#fffdf6}
+.rc div{display:flex;justify-content:space-between}
+.sp{display:flex;align-items:center;gap:8px;padding:7px 12px;border-top:.5px solid #eee;font-size:14px}
+.sp .av{width:22px;height:22px;border-radius:99px;color:#fff;font-size:11px;font-weight:700;display:grid;place-items:center}
+.sp b{margin-left:auto}
+.sp .x{margin-left:auto;font-size:12px;color:#8e8e93}
+</style></head><body>
+<div class="board-h"><b>B · Chat</b><span>Like iMessage. Jastip already happens in group chats, so the app is the chat; holds and receipts are tappable bubbles.</span></div>
+<div class="phones">
+  <div class="ph"><div class="notch"></div><div class="status"><span>9:41</span><span>●●● 100%</span></div>
+    <div class="scr">
+      <div class="hd"><div class="grp"><span style="background:#0c1b3a">D</span><span style="background:#ff2d55">A</span><span style="background:#ff9500">B</span><span style="background:#5856d6">C</span></div><b>Jastip Tokyo · Dina</b><small>1–6 Nov · 4 people</small></div>
+      <div class="msgs">
+        <div class="from">Dina</div>
+        <div class="b in">Flying to Tokyo Sat! Titip apa? 🙋‍♀️</div>
+        <div class="b out">matcha kitkat yg big bag dong</div>
+        <div class="app"><div class="art">MATCHA KITKAT · BIG BAG</div><div class="body"><div class="t">Matcha KitKat, big bag</div><div class="s">Usually ~¥1,200 · your max ¥1,500</div></div><div class="act">Change max</div></div>
+        <div class="from">Dina</div>
+        <div class="b in">Shopping Monday. Approve your hold 👇</div>
+        <div class="app l"><div class="body"><div class="t">Hold up to ¥1,600</div><div class="s">¥1,500 max + ¥100 fee · ¥0 today</div><div class="held">You pay only the receipt price</div></div><div class="act pp">Hold with <b>Pay<i>Pal</i></b></div></div>
+      </div>
+      <div class="bar"><span class="plus">+</span><span class="in2">iMessage</span></div>
+    </div></div>
+  <div class="ph"><div class="notch"></div><div class="status"><span>9:41</span><span>●●● 100%</span></div>
+    <div class="scr">
+      <div class="hd"><div class="grp"><span style="background:#0c1b3a">D</span><span style="background:#ff2d55">A</span><span style="background:#ff9500">B</span><span style="background:#5856d6">C</span></div><b>Jastip Tokyo · Dina</b><small>Monday · Don Quijote</small></div>
+      <div class="msgs">
+        <div class="from">Dina</div>
+        <div class="app l" style="width:270px"><div class="body" style="padding-bottom:4px"><div class="t">Tokyo Banana 8 sold out</div><div class="s">4 pack · ¥648 instead?</div></div><div class="act" style="justify-content:space-around"><span>Skip</span><span>Take it</span></div></div>
+        <div class="from">Bima</div><div class="b in">take it!</div>
+        <div class="from">Dina · receipt</div>
+        <div class="app l" style="width:280px"><div class="rc"><div><span>KITKAT 抹茶 大袋</span><span>¥1,188</span></div><div><span>東京ﾊﾞﾅﾅ 4個入</span><span>¥648</span></div><div><span>ﾊﾀﾞﾗﾎﾞ 極潤</span><span>¥968</span></div></div>
+          <div class="sp"><span class="av" style="background:#ff2d55">A</span>Ayu<b class="num">¥1,288 ✓</b></div>
+          <div class="sp"><span class="av" style="background:#ff9500">B</span>Bima<b class="num">¥748 ✓</b></div>
+          <div class="sp"><span class="av" style="background:#5856d6">C</span>Citra<b class="num">¥1,068 ✓</b></div>
+          <div class="sp"><span class="av" style="background:#8e8e93">C</span>Patches not found<span class="x">¥1,400 released</span></div></div>
+        <div class="b out">wah pas banget, ¥312 ga kepake 🙌</div>
+      </div>
+      <div class="bar"><span class="plus">+</span><span class="in2">iMessage</span></div>
+    </div></div>
+</div>
+<div class="caps"><div class="cap">Friend: ask + hold, inside the group chat</div><div class="cap">Traveller: swap + receipt as chat cards</div></div>
+</body></html>
