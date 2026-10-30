@@ -1,0 +1,31 @@
+{
+  "name": "s4-konbini-tax-excl",
+  "requests": [
+    {
+      "id": "r1",
+      "friend": "Nina",
+      "text": "Royce nama chocolate original",
+      "cap": 1000
+    },
+    {
+      "id": "r2",
+      "friend": "Oki",
+      "text": "Shiroi Koibito 12",
+      "cap": 1300
+    },
+    {
+      "id": "r3",
+      "friend": "Putri",
+      "text": "Jagarico salad x2",
+      "cap": 400
+    }
+  ],
+  "expected": {
+    "r1": 800,
+    "r2": 1100,
+    "r3": 300
+  },
+  "note": "Tax is printed separately (8%); the share adds each request's part of it.",
+  "image": "s4-konbini-tax-excl.png",
+  "synthetic": true
+}

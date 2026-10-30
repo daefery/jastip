@@ -1,0 +1,707 @@
+{
+  "model": "claude-sonnet-4-6",
+  "right": 19,
+  "total": 20,
+  "results": [
+    {
+      "case": "s1-donki-tax-incl.json",
+      "model": "claude-sonnet-4-6",
+      "ms": 8096,
+      "rows": [
+        {
+          "id": "r1",
+          "want": "Matcha KitKat, the big bag",
+          "expected": 1188,
+          "got": 1188,
+          "line": "KITKAT オトナノアマサ 抹茶 大袋",
+          "share": 1188,
+          "ok": true,
+          "why": "KITKAT 抹茶 大袋 = Matcha KitKat big bag"
+        },
+        {
+          "id": "r2",
+          "want": "Tokyo Banana, 8 pieces",
+          "expected": 1296,
+          "got": 1296,
+          "line": "東京バナナ ミエタッタ 8個入",
+          "share": 1296,
+          "ok": true,
+          "why": "東京バナナ 8個入 = Tokyo Banana 8 pieces"
+        },
+        {
+          "id": "r3",
+          "want": "Hada Labo Gokujyun lotion 170ml",
+          "expected": 968,
+          "got": 968,
+          "line": "ハダラボ 極潤 ヒアルロン液 170ml",
+          "share": 968,
+          "ok": true,
+          "why": "ハダラボ 極潤 ヒアルロン液 170ml = Hada Labo Gokujyun lotion 170ml"
+        },
+        {
+          "id": "r4",
+          "want": "Roihi-tsuboko patches 156",
+          "expected": 1078,
+          "got": 1078,
+          "line": "ロイヒ ツボコ 156枚",
+          "share": 1078,
+          "ok": true,
+          "why": "ロイヒ ツボコ 156枚 = Roihi-tsuboko patches 156"
+        },
+        {
+          "id": "r5",
+          "want": "Pocky strawberry",
+          "expected": null,
+          "got": null,
+          "line": null,
+          "share": null,
+          "ok": true,
+          "why": "No Pocky strawberry found on receipt"
+        }
+      ],
+      "read": {
+        "currency": "JPY",
+        "lines": [
+          {
+            "n": 1,
+            "text": "KITKAT オトナノアマサ 抹茶 大袋",
+            "qty": 1,
+            "price": 1188
+          },
+          {
+            "n": 2,
+            "text": "東京バナナ ミエタッタ 8個入",
+            "qty": 1,
+            "price": 1296
+          },
+          {
+            "n": 3,
+            "text": "ハダラボ 極潤 ヒアルロン液 170ml",
+            "qty": 1,
+            "price": 968
+          },
+          {
+            "n": 4,
+            "text": "ロイヒ ツボコ 156枚",
+            "qty": 1,
+            "price": 1078
+          },
+          {
+            "n": 5,
+            "text": "レジ袋 L",
+            "qty": 1,
+            "price": 5
+          }
+        ],
+        "tax": {
+          "included": true,
+          "amount": 397
+        },
+        "total": 4535,
+        "tax_free": false,
+        "matches": [
+          {
+            "request_id": "r1",
+            "line_n": 1,
+            "confidence": 0.97,
+            "why": "KITKAT 抹茶 大袋 = Matcha KitKat big bag"
+          },
+          {
+            "request_id": "r2",
+            "line_n": 2,
+            "confidence": 0.95,
+            "why": "東京バナナ 8個入 = Tokyo Banana 8 pieces"
+          },
+          {
+            "request_id": "r3",
+            "line_n": 3,
+            "confidence": 0.97,
+            "why": "ハダラボ 極潤 ヒアルロン液 170ml = Hada Labo Gokujyun lotion 170ml"
+          },
+          {
+            "request_id": "r4",
+            "line_n": 4,
+            "confidence": 0.96,
+            "why": "ロイヒ ツボコ 156枚 = Roihi-tsuboko patches 156"
+          },
+          {
+            "request_id": "r5",
+            "line_n": null,
+            "confidence": 0,
+            "why": "No Pocky strawberry found on receipt"
+          }
+        ],
+        "rawLines": [
+          {
+            "n": 1,
+            "text": "KITKAT オトナノアマサ 抹茶 大袋",
+            "qty": 1,
+            "price": 1188
+          },
+          {
+            "n": 2,
+            "text": "東京バナナ ミエタッタ 8個入",
+            "qty": 1,
+            "price": 1296
+          },
+          {
+            "n": 3,
+            "text": "ハダラボ 極潤 ヒアルロン液 170ml",
+            "qty": 1,
+            "price": 968
+          },
+          {
+            "n": 4,
+            "text": "ロイヒ ツボコ 156枚",
+            "qty": 1,
+            "price": 1078
+          },
+          {
+            "n": 5,
+            "text": "レジ袋 L",
+            "qty": 1,
+            "price": 5
+          }
+        ]
+      }
+    },
+    {
+      "case": "s2-drugstore-discount.json",
+      "model": "claude-sonnet-4-6",
+      "ms": 6784,
+      "rows": [
+        {
+          "id": "r1",
+          "want": "Biore UV Aqua Rich sunscreen",
+          "expected": 970,
+          "got": 970,
+          "line": "ビオレUV アクアリッチ エッセンス 70g",
+          "share": 882,
+          "ok": true,
+          "why": "ビオレUV アクアリッチ matches Biore UV Aqua Rich sunscreen"
+        },
+        {
+          "id": "r2",
+          "want": "Curel face cream",
+          "expected": 2680,
+          "got": 2680,
+          "line": "キュレル 潤浸保湿 フェイスクリーム 40g",
+          "share": 2436,
+          "ok": true,
+          "why": "キュレル 潤浸保湿 フェイスクリーム matches Curel face cream"
+        },
+        {
+          "id": "r3",
+          "want": "Salonpas 140 sheets",
+          "expected": 1680,
+          "got": 1680,
+          "line": "サロンパス 140枚",
+          "share": 1527,
+          "ok": true,
+          "why": "サロンパス 140枚 matches Salonpas 140 sheets"
+        },
+        {
+          "id": "r4",
+          "want": "Muhi itch cream",
+          "expected": null,
+          "got": null,
+          "line": null,
+          "share": null,
+          "ok": true,
+          "why": "No Muhi itch cream found on the receipt"
+        }
+      ],
+      "read": {
+        "currency": "JPY",
+        "lines": [
+          {
+            "n": 1,
+            "text": "ビオレUV アクアリッチ エッセンス 70g",
+            "qty": 1,
+            "price": 970,
+            "discounts": [
+              "値引 -10%"
+            ]
+          },
+          {
+            "n": 3,
+            "text": "キュレル 潤浸保湿 フェイスクリーム 40g",
+            "qty": 1,
+            "price": 2680
+          },
+          {
+            "n": 4,
+            "text": "サロンパス 140枚",
+            "qty": 1,
+            "price": 1680
+          },
+          {
+            "n": 5,
+            "text": "イブA錠 60錠",
+            "qty": 1,
+            "price": 1650
+          }
+        ],
+        "tax": {
+          "included": false,
+          "amount": -635
+        },
+        "total": 6345,
+        "tax_free": true,
+        "matches": [
+          {
+            "request_id": "r1",
+            "line_n": 1,
+            "confidence": 0.97,
+            "why": "ビオレUV アクアリッチ matches Biore UV Aqua Rich sunscreen"
+          },
+          {
+            "request_id": "r2",
+            "line_n": 3,
+            "confidence": 0.97,
+            "why": "キュレル 潤浸保湿 フェイスクリーム matches Curel face cream"
+          },
+          {
+            "request_id": "r3",
+            "line_n": 4,
+            "confidence": 0.98,
+            "why": "サロンパス 140枚 matches Salonpas 140 sheets"
+          },
+          {
+            "request_id": "r4",
+            "line_n": null,
+            "confidence": 0,
+            "why": "No Muhi itch cream found on the receipt"
+          }
+        ],
+        "rawLines": [
+          {
+            "n": 1,
+            "text": "ビオレUV アクアリッチ エッセンス 70g",
+            "qty": 1,
+            "price": 1078
+          },
+          {
+            "n": 2,
+            "text": "値引 -10%",
+            "qty": 1,
+            "price": -108
+          },
+          {
+            "n": 3,
+            "text": "キュレル 潤浸保湿 フェイスクリーム 40g",
+            "qty": 1,
+            "price": 2680
+          },
+          {
+            "n": 4,
+            "text": "サロンパス 140枚",
+            "qty": 1,
+            "price": 1680
+          },
+          {
+            "n": 5,
+            "text": "イブA錠 60錠",
+            "qty": 1,
+            "price": 1650
+          }
+        ]
+      }
+    },
+    {
+      "case": "s3-daiso-decoys.json",
+      "model": "claude-sonnet-4-6",
+      "ms": 10466,
+      "rows": [
+        {
+          "id": "r1",
+          "want": "makeup brush set",
+          "expected": 220,
+          "got": 220,
+          "line": "メイクブラシ セット",
+          "share": 220,
+          "ok": true,
+          "why": "メイクブラシ セット = makeup brush set, exact match"
+        },
+        {
+          "id": "r2",
+          "want": "makeup sponges",
+          "expected": 110,
+          "got": 110,
+          "line": "メイクスポンジ 6P",
+          "share": 110,
+          "ok": true,
+          "why": "メイクスポンジ 6P = makeup sponges 6-pack, exact match"
+        },
+        {
+          "id": "r3",
+          "want": "brush cleaner",
+          "expected": 330,
+          "got": 330,
+          "line": "ブラシクリーナー",
+          "share": 330,
+          "ok": true,
+          "why": "ブラシクリーナー = brush cleaner, exact match"
+        },
+        {
+          "id": "r4",
+          "want": "silicone food container",
+          "expected": null,
+          "got": 110,
+          "line": "シリコン ストレーナー",
+          "share": 110,
+          "ok": false,
+          "why": "シリコン ストレーナー is a silicone strainer (kitchenware), not specifically a food container; partial silicone/kitchen match only"
+        }
+      ],
+      "read": {
+        "currency": "JPY",
+        "lines": [
+          {
+            "n": 1,
+            "text": "シリコン ストレーナー",
+            "qty": 1,
+            "price": 110
+          },
+          {
+            "n": 2,
+            "text": "メイクブラシ セット",
+            "qty": 1,
+            "price": 220
+          },
+          {
+            "n": 3,
+            "text": "メイクスポンジ 6P",
+            "qty": 1,
+            "price": 110
+          },
+          {
+            "n": 4,
+            "text": "ブラシクリーナー",
+            "qty": 1,
+            "price": 330
+          },
+          {
+            "n": 5,
+            "text": "アイプチ ヘアクリップ",
+            "qty": 1,
+            "price": 110
+          }
+        ],
+        "tax": {
+          "included": true,
+          "amount": 0
+        },
+        "total": 880,
+        "tax_free": false,
+        "matches": [
+          {
+            "request_id": "r1",
+            "line_n": 2,
+            "confidence": 0.98,
+            "why": "メイクブラシ セット = makeup brush set, exact match"
+          },
+          {
+            "request_id": "r2",
+            "line_n": 3,
+            "confidence": 0.97,
+            "why": "メイクスポンジ 6P = makeup sponges 6-pack, exact match"
+          },
+          {
+            "request_id": "r3",
+            "line_n": 4,
+            "confidence": 0.97,
+            "why": "ブラシクリーナー = brush cleaner, exact match"
+          },
+          {
+            "request_id": "r4",
+            "line_n": 1,
+            "confidence": 0.35,
+            "why": "シリコン ストレーナー is a silicone strainer (kitchenware), not specifically a food container; partial silicone/kitchen match only"
+          }
+        ],
+        "rawLines": [
+          {
+            "n": 1,
+            "text": "シリコン ストレーナー",
+            "qty": 1,
+            "price": 110
+          },
+          {
+            "n": 2,
+            "text": "メイクブラシ セット",
+            "qty": 1,
+            "price": 220
+          },
+          {
+            "n": 3,
+            "text": "メイクスポンジ 6P",
+            "qty": 1,
+            "price": 110
+          },
+          {
+            "n": 4,
+            "text": "ブラシクリーナー",
+            "qty": 1,
+            "price": 330
+          },
+          {
+            "n": 5,
+            "text": "アイプチ ヘアクリップ",
+            "qty": 1,
+            "price": 110
+          }
+        ]
+      }
+    },
+    {
+      "case": "s4-konbini-tax-excl.json",
+      "model": "claude-sonnet-4-6",
+      "ms": 3690,
+      "rows": [
+        {
+          "id": "r1",
+          "want": "Royce nama chocolate original",
+          "expected": 800,
+          "got": 800,
+          "line": "ロイズ 生チョコレート オーレ",
+          "share": 864,
+          "ok": true,
+          "why": "ロイズ生チョコレート = Royce nama chocolate; オーレ is au lait variant, not strictly 'original' but closest match"
+        },
+        {
+          "id": "r2",
+          "want": "Shiroi Koibito 12",
+          "expected": 1100,
+          "got": 1100,
+          "line": "白い恋人 12枚",
+          "share": 1188,
+          "ok": true,
+          "why": "白い恋人 12枚 = Shiroi Koibito 12 pieces, exact match"
+        },
+        {
+          "id": "r3",
+          "want": "Jagarico salad x2",
+          "expected": 300,
+          "got": 300,
+          "line": "ジャガリコ サラダ　2個 × ¥150",
+          "share": 324,
+          "ok": true,
+          "why": "ジャガリコ サラダ 2個 = Jagarico salad x2, exact match"
+        }
+      ],
+      "read": {
+        "currency": "JPY",
+        "lines": [
+          {
+            "n": 1,
+            "text": "ロイズ 生チョコレート オーレ",
+            "qty": 1,
+            "price": 800
+          },
+          {
+            "n": 2,
+            "text": "白い恋人 12枚",
+            "qty": 1,
+            "price": 1100
+          },
+          {
+            "n": 3,
+            "text": "ジャガリコ サラダ　2個 × ¥150",
+            "qty": 2,
+            "price": 300
+          }
+        ],
+        "tax": {
+          "included": false,
+          "amount": 176
+        },
+        "total": 2376,
+        "tax_free": false,
+        "matches": [
+          {
+            "request_id": "r1",
+            "line_n": 1,
+            "confidence": 0.85,
+            "why": "ロイズ生チョコレート = Royce nama chocolate; オーレ is au lait variant, not strictly 'original' but closest match"
+          },
+          {
+            "request_id": "r2",
+            "line_n": 2,
+            "confidence": 0.99,
+            "why": "白い恋人 12枚 = Shiroi Koibito 12 pieces, exact match"
+          },
+          {
+            "request_id": "r3",
+            "line_n": 3,
+            "confidence": 0.99,
+            "why": "ジャガリコ サラダ 2個 = Jagarico salad x2, exact match"
+          }
+        ],
+        "rawLines": [
+          {
+            "n": 1,
+            "text": "ロイズ 生チョコレート オーレ",
+            "qty": 1,
+            "price": 800
+          },
+          {
+            "n": 2,
+            "text": "白い恋人 12枚",
+            "qty": 1,
+            "price": 1100
+          },
+          {
+            "n": 3,
+            "text": "ジャガリコ サラダ　2個 × ¥150",
+            "qty": 2,
+            "price": 300
+          }
+        ]
+      }
+    },
+    {
+      "case": "s5-indonesia-watsons.json",
+      "model": "claude-sonnet-4-6",
+      "ms": 6980,
+      "rows": [
+        {
+          "id": "r1",
+          "want": "Skintific ceramide moisturizer",
+          "expected": 139000,
+          "got": 139000,
+          "line": "SKINTIFIC 5X CERAMIDE MOIST 30G",
+          "share": 139000,
+          "ok": true,
+          "why": "Skintific 5X Ceramide Moisturizer matches ceramide moisturizer request; price 139000 under cap 150000"
+        },
+        {
+          "id": "r2",
+          "want": "Wardah sunscreen SPF 50",
+          "expected": 47500,
+          "got": 47500,
+          "line": "WARDAH UV SHIELD SPF50 40ML",
+          "share": 47500,
+          "ok": true,
+          "why": "Wardah UV Shield SPF50 matches Wardah sunscreen SPF50 request; price 47500 under cap 60000"
+        },
+        {
+          "id": "r3",
+          "want": "Somethinc niacinamide serum",
+          "expected": 103500,
+          "got": 103500,
+          "line": "SOMETHINC NIACINAMIDE SRM 20ML",
+          "share": 103500,
+          "ok": true,
+          "why": "Somethinc Niacinamide Serum matches Somethinc niacinamide serum request; price 115000 under cap 120000"
+        },
+        {
+          "id": "r4",
+          "want": "Emina bright stuff face wash",
+          "expected": null,
+          "got": null,
+          "line": null,
+          "share": null,
+          "ok": true,
+          "why": "No Emina bright stuff face wash found on receipt"
+        }
+      ],
+      "read": {
+        "currency": "IDR",
+        "lines": [
+          {
+            "n": 1,
+            "text": "SKINTIFIC 5X CERAMIDE MOIST 30G",
+            "qty": 1,
+            "price": 139000
+          },
+          {
+            "n": 2,
+            "text": "WARDAH UV SHIELD SPF50 40ML",
+            "qty": 1,
+            "price": 47500
+          },
+          {
+            "n": 3,
+            "text": "SOMETHINC NIACINAMIDE SRM 20ML",
+            "qty": 1,
+            "price": 103500,
+            "discounts": [
+              "DISC MEMBER"
+            ]
+          },
+          {
+            "n": 5,
+            "text": "KANTONG BELANJA",
+            "qty": 1,
+            "price": 2000
+          }
+        ],
+        "tax": {
+          "included": true,
+          "amount": 28935
+        },
+        "total": 292000,
+        "tax_free": false,
+        "matches": [
+          {
+            "request_id": "r1",
+            "line_n": 1,
+            "confidence": 0.97,
+            "why": "Skintific 5X Ceramide Moisturizer matches ceramide moisturizer request; price 139000 under cap 150000"
+          },
+          {
+            "request_id": "r2",
+            "line_n": 2,
+            "confidence": 0.95,
+            "why": "Wardah UV Shield SPF50 matches Wardah sunscreen SPF50 request; price 47500 under cap 60000"
+          },
+          {
+            "request_id": "r3",
+            "line_n": 3,
+            "confidence": 0.97,
+            "why": "Somethinc Niacinamide Serum matches Somethinc niacinamide serum request; price 115000 under cap 120000"
+          },
+          {
+            "request_id": "r4",
+            "line_n": null,
+            "confidence": 0,
+            "why": "No Emina bright stuff face wash found on receipt"
+          }
+        ],
+        "rawLines": [
+          {
+            "n": 1,
+            "text": "SKINTIFIC 5X CERAMIDE MOIST 30G",
+            "qty": 1,
+            "price": 139000
+          },
+          {
+            "n": 2,
+            "text": "WARDAH UV SHIELD SPF50 40ML",
+            "qty": 1,
+            "price": 47500
+          },
+          {
+            "n": 3,
+            "text": "SOMETHINC NIACINAMIDE SRM 20ML",
+            "qty": 1,
+            "price": 115000
+          },
+          {
+            "n": 4,
+            "text": "DISC MEMBER",
+            "qty": 1,
+            "price": -11500
+          },
+          {
+            "n": 5,
+            "text": "KANTONG BELANJA",
+            "qty": 1,
+            "price": 2000
+          }
+        ]
+      }
+    }
+  ]
+}

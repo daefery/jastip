@@ -1,0 +1,44 @@
+{
+  "name": "s1-donki-tax-incl",
+  "requests": [
+    {
+      "id": "r1",
+      "friend": "Ayu",
+      "text": "Matcha KitKat, the big bag",
+      "cap": 1500
+    },
+    {
+      "id": "r2",
+      "friend": "Bima",
+      "text": "Tokyo Banana, 8 pieces",
+      "cap": 1800
+    },
+    {
+      "id": "r3",
+      "friend": "Citra",
+      "text": "Hada Labo Gokujyun lotion 170ml",
+      "cap": 1200
+    },
+    {
+      "id": "r4",
+      "friend": "Dewi",
+      "text": "Roihi-tsuboko patches 156",
+      "cap": 1300
+    },
+    {
+      "id": "r5",
+      "friend": "Eka",
+      "text": "Pocky strawberry",
+      "cap": 400
+    }
+  ],
+  "expected": {
+    "r1": 1188,
+    "r2": 1296,
+    "r3": 968,
+    "r4": 1078,
+    "r5": null
+  },
+  "image": "s1-donki-tax-incl.png",
+  "synthetic": true
+}

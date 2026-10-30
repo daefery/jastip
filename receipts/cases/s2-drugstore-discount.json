@@ -1,0 +1,38 @@
+{
+  "name": "s2-drugstore-discount",
+  "requests": [
+    {
+      "id": "r1",
+      "friend": "Fajar",
+      "text": "Biore UV Aqua Rich sunscreen",
+      "cap": 1200
+    },
+    {
+      "id": "r2",
+      "friend": "Gita",
+      "text": "Curel face cream",
+      "cap": 3000
+    },
+    {
+      "id": "r3",
+      "friend": "Hana",
+      "text": "Salonpas 140 sheets",
+      "cap": 1800
+    },
+    {
+      "id": "r4",
+      "friend": "Indra",
+      "text": "Muhi itch cream",
+      "cap": 900
+    }
+  ],
+  "expected": {
+    "r1": 970,
+    "r2": 2680,
+    "r3": 1680,
+    "r4": null
+  },
+  "note": "r1 expected is the line price after the -10% discount printed under it.",
+  "image": "s2-drugstore-discount.png",
+  "synthetic": true
+}

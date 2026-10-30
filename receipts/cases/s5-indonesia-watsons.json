@@ -1,0 +1,37 @@
+{
+  "name": "s5-indonesia-watsons",
+  "requests": [
+    {
+      "id": "r1",
+      "friend": "Rani",
+      "text": "Skintific ceramide moisturizer",
+      "cap": 150000
+    },
+    {
+      "id": "r2",
+      "friend": "Sari",
+      "text": "Wardah sunscreen SPF 50",
+      "cap": 60000
+    },
+    {
+      "id": "r3",
+      "friend": "Tia",
+      "text": "Somethinc niacinamide serum",
+      "cap": 120000
+    },
+    {
+      "id": "r4",
+      "friend": "Umi",
+      "text": "Emina bright stuff face wash",
+      "cap": 30000
+    }
+  ],
+  "expected": {
+    "r1": 139000,
+    "r2": 47500,
+    "r3": 103500,
+    "r4": null
+  },
+  "image": "s5-indonesia-watsons.png",
+  "synthetic": true
+}

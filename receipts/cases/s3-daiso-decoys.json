@@ -1,0 +1,38 @@
+{
+  "name": "s3-daiso-decoys",
+  "requests": [
+    {
+      "id": "r1",
+      "friend": "Joko",
+      "text": "makeup brush set",
+      "cap": 300
+    },
+    {
+      "id": "r2",
+      "friend": "Kiki",
+      "text": "makeup sponges",
+      "cap": 200
+    },
+    {
+      "id": "r3",
+      "friend": "Lala",
+      "text": "brush cleaner",
+      "cap": 400
+    },
+    {
+      "id": "r4",
+      "friend": "Maya",
+      "text": "silicone food container",
+      "cap": 300
+    }
+  ],
+  "expected": {
+    "r1": 220,
+    "r2": 110,
+    "r3": 330,
+    "r4": null
+  },
+  "note": "Decoys: 'brush set' vs 'brush cleaner', and a silicone strainer that is not a container.",
+  "image": "s3-daiso-decoys.png",
+  "synthetic": true
+}
