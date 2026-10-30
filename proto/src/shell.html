@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<title>PayPal Jastip · flow prototype</title>
+<style>
+/*__CSS__*/
+</style>
+</head>
+<body data-role="dina">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+<!--__ICONS__-->
+</svg>
+
+<header class="dock" id="dock">
+  <div class="dock-row">
+    <h1 class="mark"><svg class="ic" aria-hidden="true"><use href="#i-tag"/></svg><span>Jastip</span><small>on PayPal</small></h1>
+    <ol class="stages" id="stages" aria-label="Flow stages"></ol>
+    <div class="dock-act">
+      <div class="seg" role="group" aria-label="Whose phone">
+        <button type="button" class="seg-b" id="role-dina" data-act="role" data-role="dina" aria-pressed="true"><span class="av av-dina" aria-hidden="true">D</span><span class="seg-t">Dina</span></button>
+        <button type="button" class="seg-b" id="role-friend" data-act="role" data-role="friend" aria-pressed="false"><span class="av" id="role-friend-av" aria-hidden="true">A</span><span class="seg-t" id="role-friend-name">Ayu</span></button>
+      </div>
+      <button type="button" class="money-btn" id="money-btn" data-act="sheet" aria-controls="rail" aria-expanded="false">
+        <svg class="ic" aria-hidden="true"><use href="#i-wallet"/></svg><span class="money-t">PayPal</span><span class="money-n num" id="money-n">¥0</span>
+      </button>
+      <button type="button" class="icon-btn" id="replay-top" data-act="replay" aria-label="Replay from the start"><svg class="ic" aria-hidden="true"><use href="#i-replay"/></svg></button>
+    </div>
+  </div>
+</header>
+
+<div class="guide" id="guide" role="status" aria-live="polite"></div>
+
+<main class="stage" id="stage">
+  <section class="phone" id="ph-dina" aria-labelledby="ph-dina-h">
+    <div class="ph-top">
+      <h2 class="ph-who" id="ph-dina-h"><span class="av av-dina" aria-hidden="true">D</span>Dina<small>traveller</small></h2>
+      <span class="ph-place" id="dina-place"></span>
+    </div>
+    <div class="ph-body" id="dina-body"></div>
+  </section>
+
+  <aside class="rail" id="rail" aria-labelledby="rail-h">
+    <div class="rail-in" id="rail-in"></div>
+  </aside>
+
+  <section class="phone" id="ph-friend" aria-labelledby="ph-friend-h">
+    <div class="ph-top">
+      <h2 class="vh" id="ph-friend-h">Friend's phone</h2>
+      <div class="friend-tabs" id="friend-tabs" role="group" aria-label="Show the phone of"></div>
+    </div>
+    <div class="ph-body" id="friend-body"></div>
+    <div class="pp" id="pp" hidden></div>
+  </section>
+</main>
+
+<div class="scrim" id="scrim" data-act="sheet-close" hidden></div>
+<div class="toast" id="toast" aria-hidden="true"></div>
+
+<footer class="foot" id="foot"></footer>
+
+<script>
+/*__JS__*/
+</script>
+</body>
+</html>

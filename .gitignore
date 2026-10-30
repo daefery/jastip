@@ -2,3 +2,4 @@
 node_modules/
 spikes/results-*.json
 receipts/private/
+proto/shots/
