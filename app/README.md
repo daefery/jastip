@@ -71,6 +71,17 @@ and hosted multi-user sign-in (names only, cookie session).
 
 ## Tests
 
+Last full run, 30 Oct 2026, real PayPal sandbox + real AI (`npm test`): **29/29 passed**.
+Checked afterwards directly against PayPal's API (not our database):
+
+| Request | Hold | PayPal authorization | Capture |
+|---|---|---|---|
+| Matcha KitKat | ¥1,600 | CAPTURED | COMPLETED ¥1,288 (PayPal fee ¥84) |
+| Tokyo Banana 4 pack (swap) | ¥1,900 | CAPTURED | COMPLETED ¥748 (fee ¥65) |
+| Hada Labo lotion | ¥1,300 | CAPTURED | COMPLETED ¥1,068 (fee ¥76) |
+| Roihi patches (not found) | ¥1,400 | VOIDED | none |
+
+
 ```sh
 scripts/serve.sh 5180           # real PayPal sandbox
 SANDBOX_BUYER_EMAIL=... SANDBOX_BUYER_PASSWORD=... npm test
