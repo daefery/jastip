@@ -1,128 +1,120 @@
-// Router + shell: Welcome, Trips (home), Trip, Join (friend), Activity, Me.
-import { api, ic, esc, av, toast } from "./ui.js";
+// Shell + router. Routes: / (welcome or trips), #/new, #/trip/:id, #/trip/:id/r/:rid, #/join/:code, #/me
+import { api, ic, esc, av, toast, sheet, pic } from "./ui.js";
 import { fmt } from "./money.js";
-import { homeScreen, newTripSheet, fmtDates } from "./screens/home.js";
-import { tripScreen } from "./screens/trip.js";
-import { joinScreen } from "./screens/join.js";
+import { SCENES, sceneHTML } from "./scenes.js";
+import { tripView } from "./screens/trip.js";
+import { joinView } from "./screens/join.js";
+import { newTripView } from "./screens/new.js";
 
 export const store = { me: null, config: null, mine: [], joined: [] };
 const app = document.getElementById("app");
-let lastDepth = 0;
 
 export async function refreshMe() {
   const r = await api("/api/me");
   store.me = r.user; store.mine = r.mine || []; store.joined = r.joined || [];
-  return r;
 }
 
-function welcome() {
-  app.innerHTML = `<main class="hello">
-    <img class="appicon" src="/icon.svg" alt="">
-    <h1>Jastip</h1>
-    <p>Shop abroad for friends.<br>No one pays before you buy.</p>
-    <div class="feat">
-      ${ic("lock")}<div><b>PayPal holds a max price</b><span>Friends approve. Nothing is charged yet.</span></div>
-      ${ic("receipt")}<div><b>One receipt, exact charges</b><span>Everyone pays the shelf price. Not found? Released.</span></div>
-      ${ic("shield")}<div><b>Safe both ways</b><span>You never front money for a no-show.</span></div>
+export function topbar({ back, title } = {}) {
+  const me = store.me;
+  return `<header class="top"><div class="top-in">
+    ${back ? `<a class="iconb" href="${back}" aria-label="Back">${ic("back")}</a>` : `<a class="brand" href="#/"><span class="logo">J</span><span>Jastip</span></a>`}
+    ${title ? `<b style="font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(title)}</b>` : ""}
+    <span class="sp"></span>
+    ${store.config?.paypalTest ? `<span class="sandbox">PayPal test mode</span>` : `<span class="sandbox">Sandbox</span>`}
+    ${me ? `<button class="me-b" data-me aria-label="You: ${esc(me.name)}">${av(me, 34)}<span>${esc(me.name)}</span></button>` : ""}
+  </div></header>`;
+}
+
+function welcome(next) {
+  app.innerHTML = `${topbar()}<main class="hello"><div class="box">
+    <svg class="art" viewBox="0 0 250 190" aria-hidden="true">${SCENES.open.svg}</svg>
+    <h1>Shop abroad for friends.</h1>
+    <p>No one pays before you buy.</p>
+    <div class="feats">
+      <div class="feat"><span class="ic">${ic("lock")}</span><div><b>PayPal holds a max price</b><span>Friends approve. ¥0 charged until the receipt.</span></div></div>
+      <div class="feat"><span class="ic">${ic("receipt")}</span><div><b>One receipt, exact charges</b><span>Everyone pays their line. Not found? Released.</span></div></div>
+      <div class="feat"><span class="ic">${ic("plane")}</span><div><b>Track it like a delivery</b><span>Held, shopping, paid, delivered.</span></div></div>
     </div>
-    <form id="hi"><label class="vh" for="name">Your first name</label>
-      <input id="name" class="input-big" autocomplete="given-name" placeholder="Your first name" maxlength="24" required>
-      <div style="height:12px"></div><button class="btn">Continue</button></form>
-    <p style="font-size:12px;margin:18px 0 0">PayPal sandbox · test money only</p>
-  </main>`;
-  document.getElementById("hi").onsubmit = async (e) => {
+    <form id="hi"><label class="field"><span>Your first name</span><input class="input" id="name" autocomplete="given-name" maxlength="24" required></label>
+      <button class="btn dark">Continue</button></form>
+  </div></main>`;
+  app.querySelector("#hi").onsubmit = async (e) => {
     e.preventDefault();
-    const name = document.getElementById("name").value.trim();
-    if (!name) return;
-    await api("/api/me", { body: { name } });
-    await refreshMe();
-    route();
+    const name = app.querySelector("#name").value.trim(); if (!name) return;
+    await api("/api/me", { body: { name } }); await refreshMe(); next();
   };
 }
 
-export function navbar({ title, back, right = "", large = true }) {
-  return `<header class="nav" data-nav><div class="nav-row">
-    <div class="nav-l">${back ? `<a class="nb" href="${back.href}" aria-label="Back">${ic("back")}<span>${esc(back.label || "")}</span></a>` : ""}</div>
-    <div class="nav-title">${esc(title)}</div>
-    <div class="nav-r">${right}</div></div></header>
-    ${large ? `<div class="wrap"><h1 class="large">${esc(title)}</h1></div>` : ""}`;
+const ROLE_ST = {
+  open: ["Taking asks", "gray"], holds: ["Holds open", "blue"], shopping: ["Shopping", "orange"], settled: ["Paid", "green"],
+};
+function friendStatus(sum, t) {
+  if (sum.swaps) return ["Pick a swap", "orange"];
+  if (sum.toHold && t.status === "holds") return ["Approve hold", "orange"];
+  if (sum.toConfirm) return ["Got it?", "orange"];
+  if (t.status === "settled") return sum.charged ? ["Paid", "green"] : ["Released", "gray"];
+  if (t.status === "shopping") return ["Shopping", "orange"];
+  if (sum.held) return ["Held", "blue"];
+  return ["Asked", "gray"];
 }
 
-export function tabbar(cur) {
-  const t = (id, href, icon, label) => `<a class="tab" href="${href}"${cur === id ? ' aria-current="page"' : ""}>${ic(icon)}<span>${label}</span></a>`;
-  return `<nav class="tabbar" aria-label="Main"><div class="tabs">${t("trips", "#/", "plane", "Trips")}${t("asks", "#/asks", "bag", "My asks")}${t("me", "#/me", "person", "Me")}</div></nav>`;
+function home() {
+  const trips = [
+    ...store.mine.map((t) => ({ t, mine: true })),
+    ...store.joined.map((t) => ({ t, mine: false })),
+  ];
+  const row = ({ t, mine }) => {
+    const [label, tone] = mine ? (t.sum.waiting ? [`${t.sum.waiting} new ask${t.sum.waiting > 1 ? "s" : ""}`, "orange"] : ROLE_ST[t.status]) : friendStatus(t.sum, t);
+    const money = mine ? (t.status === "settled" ? `+${fmt(t.sum.charged, t.currency)}` : t.sum.held ? `${fmt(t.sum.held, t.currency)} held` : `${t.sum.count} ask${t.sum.count === 1 ? "" : "s"}`)
+      : t.sum.charged ? `${fmt(t.sum.charged, t.currency)} paid` : t.sum.held ? `${fmt(t.sum.held, t.currency)} held` : "";
+    return `<a class="trip" href="#/trip/${t.id}">
+      <span class="route"><small>${esc(t.home_code)}</small>${esc(t.city_code)}</span>
+      <div style="min-width:0"><b>${mine ? `Your trip · ${esc(t.city)}` : `${esc(t.owner)} · ${esc(t.city)}`}</b><div class="sub">${dr(t)}${mine ? "" : ` · you asked ${t.sum.count}`}</div></div>
+      <div class="r"><span class="st ${tone}"><i></i>${esc(label)}</span><span class="amt num">${money}</span></div></a>`;
+  };
+  app.innerHTML = `${topbar()}<main class="page">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <div><h1 class="h1">Trips</h1><p class="lead" style="margin:0">${trips.length ? "Your trips and the ones you asked from." : ""}</p></div>
+      <a class="btn dark sm" href="#/new" style="height:44px">${ic("plus")}New trip</a></div>
+    ${trips.length ? `<div class="sec-t"><span>Active</span></div><div class="home">${trips.map(row).join("")}</div>` : `
+      <div class="empty card" style="margin-top:18px"><svg class="art" viewBox="0 0 250 190" aria-hidden="true">${SCENES.open.svg}</svg><b>Going somewhere?</b>
+        <span>Open a trip and share the link in your group chat. Friends ask, PayPal holds, you shop.</span>
+        <a class="btn dark" href="#/new" style="max-width:280px">${ic("plus")}Open a trip</a></div>`}
+  </main>`;
 }
+const dr = (t) => { const d = (s) => new Date(s + "T00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" }); return `${d(t.depart)} – ${d(t.ret)}`; };
 
-function watchNav() {
-  const nav = document.querySelector("[data-nav]");
-  if (!nav) return;
-  const f = () => nav.classList.toggle("solid", scrollY > 30);
-  removeEventListener("scroll", watchNav._f || (() => {}));
-  watchNav._f = f; addEventListener("scroll", f, { passive: true }); f();
-}
-
-function asksScreen() {
-  const rows = store.joined.map((t) => `<a class="row with-thumb" href="#/trip/${t.id}">
-      <span class="thumb">${ic("plane")}</span><div class="main"><div class="t">${esc(t.owner)} → ${esc(t.city)}</div><div class="s">${esc(fmtDates(t))}</div></div>${ic("chev", "chev")}</a>`).join("");
-  return `<div class="screen">${navbar({ title: "My asks" })}<div class="wrap">
-    ${rows ? `<div class="sec"><div class="list">${rows}</div></div>` : `<div class="empty"><div class="glyph">${ic("bag")}</div><b>No asks yet</b><span>When a friend shares a trip link, your requests show up here.</span></div>`}
-  </div></div>${tabbar("asks")}`;
-}
-
-function meScreen() {
+function meSheet() {
   const u = store.me;
-  return `<div class="screen">${navbar({ title: "Me" })}<div class="wrap">
-    <div class="sec"><div class="list"><div class="row" style="padding:16px">${av(u, 56)}<div class="main"><div class="t" style="font-size:20px;font-weight:600">${esc(u.name)}</div><div class="s">${u.kept} handover${u.kept === 1 ? "" : "s"} kept</div></div></div></div></div>
-    <div class="sec"><div class="sec-h">Safety</div><div class="list">
-      <div class="row with-ico"><span class="ico" style="background:var(--green)">${ic("shield")}</span><div class="main"><div class="t">New friend limit</div><div class="s">Up to $50 held until a first handover</div></div></div>
-      <div class="row with-ico"><span class="ico" style="background:var(--blue)">${ic("lock")}</span><div class="main"><div class="t">Holds, not payments</div><div class="s">Charged only from the receipt</div></div></div>
-      <div class="row with-ico"><span class="ico" style="background:var(--orange)">${ic("scale")}</span><div class="main"><div class="t">Customs</div><div class="s">Indonesia allows USD 500 duty-free per arrival</div></div></div>
-    </div></div>
-    <div class="sec"><div class="sec-h">Demo</div><div class="list">
-      <a class="row" href="#/switch"><div class="main"><div class="t" style="color:var(--blue)">Switch person on this device</div></div></a>
-    </div><div class="sec-f">PayPal sandbox · ${store.config?.paypal ? "connected" : "not configured"} · AI ${store.config?.ai ? "on" : "off"}</div></div>
-  </div></div>${tabbar("me")}`;
-}
-
-async function switchScreen() {
-  // demo helper: lists people known to this server via trips this user can see
-  const people = new Map();
-  for (const t of store.mine) {
-    const v = await api(`/api/trips/${t.id}`);
-    people.set(v.owner.id, v.owner);
-    for (const r of v.requests) people.set(r.friend.id, r.friend);
-  }
-  const rows = [...people.values()].map((p) => `<button class="row with-thumb" data-uid="${p.id}">${av(p, 44)}<div class="main"><div class="t">${esc(p.name)}</div></div>${p.id === store.me.id ? ic("check", "chev") : ""}</button>`).join("");
-  app.innerHTML = `<div class="screen">${navbar({ title: "Switch person", back: { href: "#/me", label: "Me" } })}<div class="wrap">
-    <div class="sec"><div class="list">${rows || `<div class="row"><div class="main"><div class="s">Open a trip and get a request first.</div></div></div>`}</div>
-    <div class="sec-f">For demos on one device. Each person normally uses their own phone.</div></div></div></div>`;
-  app.querySelectorAll("[data-uid]").forEach((b) => b.onclick = async () => { await api("/api/switch", { body: { id: b.dataset.uid } }); await refreshMe(); toast(`You are ${store.me.name}`); location.hash = "#/"; });
-  watchNav();
+  const s = sheet({ title: "You", body: `
+    <div class="who-row" style="border:0">${av(u, 52)}<div><b style="font-size:18px">${esc(u.name)}</b><span>${u.kept} handover${u.kept === 1 ? "" : "s"} kept</span></div></div>
+    <div class="menu">
+      <button data-switch><span class="ti" style="background:#5e5ce6">${ic("user")}</span><div><b>Switch person</b><span>For demos on one device</span></div></button>
+      <a href="#/new" data-close><button style="width:100%"><span class="ti" style="background:#0b0b0b">${ic("plus")}</span><div style="text-align:left"><b>New trip</b><span>Going somewhere?</span></div></button></a>
+    </div>
+    <p class="hint" style="margin-top:14px">PayPal ${store.config?.paypalTest ? "test mode" : "sandbox"} · AI ${store.config?.ai ? esc(store.config.aiModel) : "off"}</p>` });
+  s.el.querySelector("[data-switch]").onclick = async () => {
+    const people = new Map();
+    for (const t of [...store.mine, ...store.joined]) { const v = await api(`/api/trips/${t.id}`).catch(() => null); if (!v) continue; people.set(v.owner.id, v.owner); v.requests.forEach((r) => people.set(r.friend.id, r.friend)); }
+    s.el.querySelector(".menu").innerHTML = [...people.values()].map((p) => `<button data-uid="${p.id}"><span>${av(p, 44)}</span><div><b>${esc(p.name)}</b><span>${p.id === u.id ? "You now" : "Switch"}</span></div></button>`).join("") || `<p class="hint">Open a trip and get an ask first.</p>`;
+    s.el.querySelectorAll("[data-uid]").forEach((b) => b.onclick = async () => { await api("/api/switch", { body: { id: b.dataset.uid } }); await refreshMe(); s.close(); toast(`You are ${store.me.name}`); route(); });
+  };
 }
 
 export async function route() {
-  const hash = location.hash.slice(1) || "/";
-  const [path, qs] = hash.split("?");
+  const [path, qs] = (location.hash.slice(1) || "/").split("?");
   const params = new URLSearchParams(qs || "");
-  const depth = path.split("/").filter(Boolean).length;
-  const backAnim = depth < lastDepth; lastDepth = depth;
-  if (path.startsWith("/join/")) { await joinScreen(app, path.split("/")[2]); watchNav(); return; }
-  if (!store.me) return welcome();
+  const parts = path.split("/").filter(Boolean);
   try {
-    if (path === "/") { await refreshMe(); app.innerHTML = homeScreen(store); bindHome(); }
-    else if (path === "/asks") { await refreshMe(); app.innerHTML = asksScreen(); }
-    else if (path === "/me") { await refreshMe(); app.innerHTML = meScreen(); app.querySelector('a[href="#/switch"]'); }
-    else if (path === "/switch") return switchScreen();
-    else if (path.startsWith("/trip/")) await tripScreen(app, path.split("/")[2], params);
-    else location.hash = "#/";
-  } catch (e) { toast(e.message, "err"); }
-  if (backAnim) app.querySelector(".screen")?.classList.add("back");
-  watchNav();
+    if (parts[0] === "join") return void (await joinView(app, parts[1]));
+    if (!store.me) return welcome(route);
+    await refreshMe();
+    if (parts[0] === "new") newTripView(app);
+    else if (parts[0] === "trip") await tripView(app, parts[1], { rid: parts[2] === "r" ? parts[3] : null, params });
+    else home();
+  } catch (e) { toast(e.message, "err"); if (e.status === 404) location.hash = "#/"; }
+  app.querySelector("[data-me]")?.addEventListener("click", meSheet);
   scrollTo({ top: 0 });
-}
-
-function bindHome() {
-  app.querySelectorAll("[data-new]").forEach((b) => b.onclick = () => newTripSheet(store, (t) => { location.hash = `#/trip/${t.id}`; }));
 }
 
 (async () => {
@@ -131,4 +123,3 @@ function bindHome() {
   addEventListener("hashchange", route);
   route();
 })();
-export { fmt };

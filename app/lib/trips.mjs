@@ -55,8 +55,9 @@ export function makeTrips(db) {
     const cap = Math.round(r.cap);
     if (!(cap > 0)) throw new Rule("Set a max price", 400);
     const rid = id(10);
-    await run(`INSERT INTO requests(id,trip_id,friend_id,title,detail,source,art,typical,cap,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)`,
-      rid, t.id, friend.id, String(r.title).slice(0, 60), (r.detail || "").slice(0, 60), (r.source || "").slice(0, 300), r.art || "other", r.typical || null, cap, now());
+    const rule = ["ask", "similar", "skip"].includes(r.rule) ? r.rule : "ask";
+    await run(`INSERT INTO requests(id,trip_id,friend_id,title,detail,source,art,typical,cap,rule,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+      rid, t.id, friend.id, String(r.title).slice(0, 60), (r.detail || "").slice(0, 60), (r.source || "").slice(0, 300), r.art || "other", r.typical || null, cap, rule, now());
     await log(t.id, rid, "trip", `${friend.name} asked`, r.title);
     return request(rid);
   }
@@ -140,8 +141,10 @@ export function makeTrips(db) {
       const price = Math.round(swap?.price || 0);
       if (!swap?.title || !(price > 0)) throw new Rule("Swap needs a name and price", 400);
       if (price > r.cap) throw new Rule(`Over ${await nameOf(r.friend_id)}'s max (${fmt(r.cap, t.currency)})`); // S8
-      await run("UPDATE requests SET status='swap_asked', swap_title=?, swap_price=? WHERE id=?", swap.title.slice(0, 60), price, rid);
-      await log(t.id, rid, "trip", "Swap asked", `${swap.title} · ${fmt(price, t.currency)}`);
+      if (r.rule === "skip") throw new Rule(`${await nameOf(r.friend_id)} asked to skip if it's sold out. Mark it Not here.`);
+      const auto = r.rule === "similar";
+      await run(`UPDATE requests SET status='${auto ? "swapped" : "swap_asked"}', swap_title=?, swap_price=? WHERE id=?`, swap.title.slice(0, 60), price, rid);
+      await log(t.id, rid, "trip", auto ? "Swap taken (similar ok)" : "Swap asked", `${swap.title} · ${fmt(price, t.currency)}`);
     }
   }
 
@@ -234,12 +237,25 @@ export function makeTrips(db) {
     };
   }
 
+  async function summary(t, friendId) {
+    const rs = await all(`SELECT status, hold, charged, released, cap FROM requests WHERE trip_id=?${friendId ? " AND friend_id=?" : ""}`, ...(friendId ? [t.id, friendId] : [t.id]));
+    const held = rs.filter((r) => ["held", "found", "swap_asked", "swapped", "not_found"].includes(r.status)).reduce((s2, r) => s2 + (r.hold || 0), 0);
+    const charged = rs.reduce((s2, r) => s2 + (r.charged || 0), 0);
+    const waiting = rs.filter((r) => r.status === "asked").length;
+    const toHold = rs.filter((r) => r.status === "accepted").length;
+    const swaps = rs.filter((r) => r.status === "swap_asked").length;
+    const toConfirm = rs.filter((r) => r.status === "settled").length;
+    return { count: rs.length, held, charged, waiting, toHold, swaps, toConfirm };
+  }
+
   async function tripsFor(u) {
     const mineT = await all("SELECT * FROM trips WHERE owner_id=? ORDER BY created_at DESC", u.id);
     const joined = await all("SELECT DISTINCT t.* FROM trips t JOIN requests r ON r.trip_id=t.id WHERE r.friend_id=? ORDER BY t.created_at DESC", u.id);
+    const mine = [];
+    for (const t of mineT) mine.push({ ...t, sum: await summary(t) });
     const out = [];
-    for (const t of joined) out.push({ ...t, invite: undefined, payee_email: undefined, owner: await nameOf(t.owner_id) });
-    return { mine: mineT, joined: out };
+    for (const t of joined) { const o = await user(t.owner_id); out.push({ ...t, invite: undefined, payee_email: undefined, owner: o.name, ownerColor: o.color, sum: await summary(t, u.id) }); }
+    return { mine, joined: out };
   }
 
   const byInvite = (code) => one("SELECT * FROM trips WHERE invite=?", code);

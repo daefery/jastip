@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS trips (
 CREATE TABLE IF NOT EXISTS requests (
   id TEXT PRIMARY KEY, trip_id TEXT NOT NULL REFERENCES trips(id), friend_id TEXT NOT NULL REFERENCES users(id),
   title TEXT NOT NULL, detail TEXT, source TEXT, art TEXT, typical INTEGER,
-  cap INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'asked',
+  cap INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'asked', rule TEXT NOT NULL DEFAULT 'ask',
   swap_title TEXT, swap_price INTEGER, line_text TEXT, price INTEGER,
   order_id TEXT, auth_id TEXT, capture_id TEXT, hold INTEGER, charged INTEGER, released INTEGER,
   authorized_at INTEGER, captured_at INTEGER, delivered_at INTEGER, created_at INTEGER NOT NULL
@@ -52,6 +52,8 @@ export async function nodeSqlite(file) {
   }
   const db = new DatabaseSync(file);
   db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;" + SCHEMA);
+  const cols = db.prepare("PRAGMA table_info(requests)").all().map((c) => c.name);
+  if (!cols.includes("rule")) db.exec("ALTER TABLE requests ADD COLUMN rule TEXT NOT NULL DEFAULT 'ask'");
   const norm = (a) => a.map((x) => (x === undefined ? null : x));
   return {
     get: async (sql, ...a) => db.prepare(sql).get(...norm(a)) ?? null,

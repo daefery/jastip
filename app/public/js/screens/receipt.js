@@ -1,57 +1,52 @@
 // Receipt: photo -> AI reads lines -> code plans each charge -> traveller confirms -> PayPal captures/voids.
-import { ic, esc, api, av, toast, busy, sheet, fileToDataUrl, sleep } from "../ui.js";
+import { ic, esc, api, av, toast, busy, sheet, fileToDataUrl } from "../ui.js";
 import { fmt } from "../money.js";
 
 export function receiptFlow(v, done) {
   const t = v.trip, cur = t.currency;
-  const s = sheet({ title: "Receipt", left: `<button class="nb" data-close>Cancel</button>`, right: "", body: `
-    <div id="rx">
-      <div class="empty" style="padding:18px 8px"><div class="glyph">${ic("receipt")}</div><b>One photo, exact charges</b><span>Lay the receipt flat. Every friend pays their line plus fee.</span></div>
-      <label class="btn" for="rx-file" style="cursor:pointer">${ic("camera")}<span>Take photo</span></label>
+  const s = sheet({ title: "Scan receipt", right: `<button class="lk" data-close>Cancel</button>`, body: `<div id="rx">
+      <div class="note">${ic("receipt")}<span>Lay the receipt flat in good light. Each friend pays their line + ${fmt(t.fee, cur)}, never more than their hold.</span></div>
+      <div style="height:14px"></div>
+      <label class="btn dark" for="rx-file" style="cursor:pointer">${ic("camera")}Take photo</label>
       <input id="rx-file" type="file" accept="image/*" capture="environment" hidden>
-      <div style="height:10px"></div>
-      <button class="btn gray" id="rx-sample">${ic("receipt")}<span>Use sample receipt</span></button>
-      <div class="sec-f" style="text-align:center">The sample is a Don Quijote receipt for testing.</div>
-    </div>` });
+      <div style="height:8px"></div>
+      <button class="btn light" id="rx-sample">${ic("receipt")}Use sample receipt</button>
+      <p class="hint" style="text-align:center">The sample is a Don Quijote receipt for testing.</p></div>` });
   const box = s.el.querySelector("#rx");
 
   const read = async (dataUrl) => {
-    box.innerHTML = `<div class="photo"><img src="${dataUrl}" alt="Receipt photo"><div class="scan"></div></div>
-      <p class="lead" style="text-align:center;margin-top:14px" id="rx-msg">Reading the receipt…</p>`;
-    const msgs = ["Reading the receipt…", "Matching lines to requests…", "Checking each max price…"];
+    box.innerHTML = `<div class="photo"><img src="${dataUrl}" alt="Receipt photo"><div class="scan"></div></div><p class="hint" style="text-align:center;margin-top:12px" id="rx-msg" aria-live="polite">Reading the receipt…</p>`;
+    const msgs = ["Reading the receipt…", "Matching lines to asks…", "Checking each max price…"];
     let i = 0; const tick = setInterval(() => { const m = box.querySelector("#rx-msg"); if (m) m.textContent = msgs[++i % msgs.length]; }, 1800);
-    try {
-      const r = await api(`/api/trips/${t.id}/receipt`, { body: { image: dataUrl } });
+    const t0 = Date.now();
+    try { const r = await api(`/api/trips/${t.id}/receipt`, { body: { image: dataUrl } }); clearInterval(tick); plan(r, Math.round((Date.now() - t0) / 1000)); }
+    catch (e) {
       clearInterval(tick);
-      plan(r, dataUrl);
-    } catch (e) {
-      clearInterval(tick);
-      box.innerHTML = `<div class="empty"><div class="glyph" style="color:var(--red)">${ic("xc")}</div><b>Couldn't read it</b><span>${esc(e.message)}</span></div><button class="btn gray" id="rx-again">Try again</button>`;
-      box.querySelector("#rx-again").onclick = () => { s.close(); receiptFlow(v, done); };
+      box.innerHTML = `<div class="empty" style="padding:20px"><b>Couldn't read it</b><span>${esc(e.message)}</span></div><button class="btn dark" id="rx-again">Try again</button>`;
+      box.querySelector("#rx-again").onclick = () => { s.close(); setTimeout(() => receiptFlow(v, done), 300); };
     }
   };
 
-  const plan = (r, dataUrl) => {
+  const plan = (r, secs) => {
     const byId = new Map(v.requests.map((x) => [x.id, x]));
-    const total = r.plan.reduce((a, p) => a + p.charge, 0);
     const owned = new Map(r.plan.filter((p) => p.line).map((p) => [p.line.n, byId.get(p.id)?.friend]));
+    const total = r.plan.reduce((a, p) => a + p.charge, 0);
+    const nC = r.plan.filter((p) => p.charge).length, nR = r.plan.filter((p) => !p.charge).length;
+    s.el.querySelector(".sh-h h2").textContent = `Read in ${secs} s`;
     box.innerHTML = `
       <div class="receipt"><div class="shop">${esc(r.shop || "Receipt")}</div><hr>
-        ${r.lines.map((l, i) => { const f = owned.get(l.n); return `<div class="ln${f ? " mine" : ""}" style="--i:${i}"><span>${f ? av(f, 20) : ""}</span><span>${esc(l.text)}${l.disc ? " (disc.)" : ""}</span><span>${fmt(l.price, cur)}</span></div>`; }).join("")}
-      </div>
-      <div style="height:22px"></div>
-      <div class="sec"><div class="sec-h">Charges <b class="num">${fmt(total, cur)}</b></div><div class="list">
-        ${r.plan.map((p) => { const q = byId.get(p.id); return `<div class="row with-thumb">${av(q.friend, 40)}<div class="main"><div class="t">${esc(q.friend.name)}</div><div class="s">${p.line ? `${esc(p.title)} · ${fmt(p.line.price, cur)} + ${fmt(t.fee, cur)}${p.over ? " · capped at max" : ""}` : `${esc(p.title)} · ${esc(p.why)}`}</div></div>
-          <div style="text-align:right">${p.charge ? `<div class="v strong num">${fmt(p.charge, cur)}</div><div class="s num" style="font-size:13px;color:var(--label2)">of ${fmt(p.hold, cur)}</div>` : `<span class="pill">Release</span>`}</div></div>`; }).join("")}
-      </div><div class="sec-f">Each charge is the receipt line plus fee, never above the friend's hold. Unmatched holds are released.</div></div>
-      <div class="cta no-tab"><button class="btn" id="rx-go">${ic("lock")}<span>Charge ${r.plan.filter((p) => p.charge).length} · release ${r.plan.filter((p) => !p.charge).length}</span></button></div>`;
+        ${r.lines.map((l) => { const f = owned.get(l.n); return `<div class="l"><span>${f ? av(f, 20) : ""}</span><span>${esc(l.text)}${l.disc ? " (disc.)" : ""}</span><span>${fmt(l.price, cur)}</span></div>`; }).join("")}</div>
+      <div class="split" style="margin-top:12px">${r.plan.map((p) => { const q = byId.get(p.id); return `<div class="sr${p.charge ? "" : " x"}">${av(q.friend, 28)}<div class="t">${esc(q.friend.name)} · ${esc(p.title)}<small>${p.line ? `${fmt(p.line.price, cur)} + ${fmt(t.fee, cur)} fee${p.over ? " · capped at max" : ""}` : esc(p.why)}</small></div>
+        <b class="num">${p.charge ? fmt(p.charge, cur) : `${fmt(p.hold || 0, cur)} released`}${p.charge ? `<small>of ${fmt(p.hold, cur)}</small>` : ""}</b></div>`; }).join("")}</div>
+      <p class="hint" style="margin:10px 4px 14px">Wrong match? Cancel and retake. Nothing moves until you tap below.</p>
+      <button class="btn dark" id="rx-go">${ic("lock")}Charge ${nC}${nR ? ` · release ${nR}` : ""} · ${fmt(total, cur)}</button>`;
     box.querySelector("#rx-go").onclick = async (e) => {
       busy(e.currentTarget, true, "Talking to PayPal");
       try {
         const out = await api(`/api/trips/${t.id}/settle`, { body: { receipt: r.receipt } });
         const bad = out.results.filter((x) => x.error);
         s.close();
-        if (bad.length) toast(`${bad.length} PayPal call failed. See Activity.`, "err"); else toast("Charged exactly. Holds released.");
+        toast(bad.length ? `${bad.length} PayPal call failed. See activity.` : "Charged exactly. Holds released.", bad.length ? "err" : "ok");
         done();
       } catch (er) { busy(e.currentTarget, false); toast(er.message, "err"); }
     };
@@ -59,7 +54,7 @@ export function receiptFlow(v, done) {
 
   box.querySelector("#rx-file").onchange = async (e) => { const f = e.target.files[0]; if (f) read(await fileToDataUrl(f)); };
   box.querySelector("#rx-sample").onclick = async () => {
-    const res = await fetch("/sample/receipt.png"); const blob = await res.blob();
+    const blob = await (await fetch("/sample/receipt.png")).blob();
     read(await new Promise((ok) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.readAsDataURL(blob); }));
   };
 }
