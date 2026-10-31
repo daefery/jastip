@@ -12,7 +12,7 @@ Test buyer: any PayPal sandbox *personal* account.
 
 ## Run locally
 
-Node 22.5 or newer. No dependencies.
+Node 22.5 or newer. No runtime dependencies (`npm install` only adds `playwright-core` for the browser tests).
 
 ```sh
 cp ../.env.example ../.env     # PayPal sandbox app keys + an OpenAI-compatible AI endpoint

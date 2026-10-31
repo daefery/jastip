@@ -1,11 +1,11 @@
 // Play the E story at one viewport, by real taps, with checks that matter for adaptive:
 // no horizontal overflow, the step's primary action is visible (not covered), sheets fit, no page errors.
 // Usage: node walk-adaptive.mjs 390x844 [--dark]
-import { chromium } from "/home/feryyp/.agents/skills/adaptive-ux/scripts/node_modules/playwright-core/index.mjs";
+import { chromium } from "playwright-core";
 import { mkdirSync } from "node:fs";
 const [w, h] = (process.argv[2] || "390x844").split("x").map(Number);
 const out = new URL(`./shots-adaptive/${w}/`, import.meta.url).pathname; mkdirSync(out, { recursive: true });
-const b = await chromium.launch({ executablePath: "/usr/bin/google-chrome" });
+const b = await chromium.launch({ executablePath: process.env.CHROME || "/usr/bin/google-chrome" });
 const touch = w < 1024;
 const p0 = 0; const p = await b.newPage({ viewport: { width: w, height: h }, hasTouch: touch, isMobile: touch, deviceScaleFactor: 1 });
 const errs = [], probs = [];

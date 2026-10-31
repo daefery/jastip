@@ -1,11 +1,11 @@
 // Browser checks for the exceptional journeys (council round 1). Needs a test-mode server with DEMO_SWITCH=1:
 //   scripts/serve.sh 5181 fake && node test/ui-edges.mjs
-import { chromium } from "/home/feryyp/.agents/skills/adaptive-ux/scripts/node_modules/playwright-core/index.mjs";
+import { chromium } from "playwright-core";
 const BASE = process.env.BASE || "http://localhost:5181";
 const res = []; const ok = (c, w, x = "") => { res.push(!!c); console.log(`${c ? "PASS" : "FAIL"}  ${w}${x ? "  " + x : ""}`); };
 const d = (k) => new Date(Date.now() + k * 864e5).toISOString().slice(0, 10);
 
-const b = await chromium.launch({ executablePath: "/usr/bin/google-chrome" });
+const b = await chromium.launch({ executablePath: process.env.CHROME || "/usr/bin/google-chrome" });
 async function person(name, vp = { width: 390, height: 844 }) {
   const ctx = await b.newContext({ viewport: vp, baseURL: BASE });
   const p = await ctx.newPage(); const errs = []; p.on("pageerror", (e) => errs.push(e.message));

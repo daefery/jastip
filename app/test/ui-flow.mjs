@@ -2,13 +2,13 @@
 // against a running server (default test-mode PayPal on :5181; real AI). Checks at every screen:
 // no page errors, no horizontal overflow, the screen's primary action is visible and not covered.
 // Usage: node test/ui-flow.mjs 390x844   (BASE=http://localhost:5181)
-import { chromium } from "/home/feryyp/.agents/skills/adaptive-ux/scripts/node_modules/playwright-core/index.mjs";
+import { chromium } from "playwright-core";
 import { mkdirSync } from "node:fs";
 const BASE = process.env.BASE || "http://localhost:5181";
 const [w, h] = (process.argv[2] || "390x844").split("x").map(Number);
 const out = new URL(`../shots/flow-${w}/`, import.meta.url).pathname; mkdirSync(out, { recursive: true });
 const touch = w < 1024;
-const b = await chromium.launch({ executablePath: "/usr/bin/google-chrome" });
+const b = await chromium.launch({ executablePath: process.env.CHROME || "/usr/bin/google-chrome" });
 const errs = [], probs = []; let n = 0;
 async function person(name) {
   const ctx = await b.newContext({ viewport: { width: w, height: h }, hasTouch: touch, isMobile: touch, deviceScaleFactor: 1 });

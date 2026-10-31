@@ -1,7 +1,7 @@
 // End-to-end against a running server (default http://localhost:5180), real PayPal sandbox + real AI.
 // The PayPal approval step is done in a real browser as the sandbox buyer (SANDBOX_BUYER_EMAIL / _PASSWORD),
 // so it proves the full redirect flow. Every safeguard S1-S8 from lib/trips.mjs is tried.
-import { chromium } from "/home/feryyp/.agents/skills/adaptive-ux/scripts/node_modules/playwright-core/index.mjs";
+import { chromium } from "playwright-core";
 import { readFileSync } from "node:fs";
 
 const BASE = process.env.BASE || "http://localhost:5180";
@@ -74,7 +74,7 @@ ok(tooBig.status === 409 && /new-friend limit/.test(tooBig.error), "S6 new frien
 
 // S4: once held, a friend can't withdraw (checked after approval below)
 if (!BUYER || !PASS) { console.log("\nSet SANDBOX_BUYER_EMAIL and SANDBOX_BUYER_PASSWORD to run the PayPal approval part."); process.exit(1); }
-const browser = await chromium.launch({ executablePath: "/usr/bin/google-chrome" });
+const browser = await chromium.launch({ executablePath: process.env.CHROME || "/usr/bin/google-chrome" });
 const ctx = await browser.newContext();
 const page = await ctx.newPage();
 let first = true;

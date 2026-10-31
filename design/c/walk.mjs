@@ -1,8 +1,8 @@
 // Play the whole C story by real taps; screenshot each moment; fail on page errors or a stuck step.
-import { chromium } from "/home/feryyp/.agents/skills/adaptive-ux/scripts/node_modules/playwright-core/index.mjs";
+import { chromium } from "playwright-core";
 import { mkdirSync } from "node:fs";
 const out = new URL("./shots/", import.meta.url).pathname; mkdirSync(out, { recursive: true });
-const b = await chromium.launch({ executablePath: "/usr/bin/google-chrome" });
+const b = await chromium.launch({ executablePath: process.env.CHROME || "/usr/bin/google-chrome" });
 const p = await b.newPage({ viewport: { width: 520, height: 1060 }, deviceScaleFactor: 2 });
 const errs = []; p.on("pageerror", (e) => errs.push(String(e)));
 await p.goto("file://" + new URL("./index.html", import.meta.url).pathname);

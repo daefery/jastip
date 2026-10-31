@@ -1,12 +1,12 @@
 // Screenshots of the real app at phone and desktop, driving the UI by taps.
 // Uses the sandbox-free parts only (no PayPal login): welcome, new trip, share, friend ask with AI, accept, shopping day, hold sheet.
-import { chromium } from "/home/feryyp/.agents/skills/adaptive-ux/scripts/node_modules/playwright-core/index.mjs";
+import { chromium } from "playwright-core";
 import { mkdirSync } from "node:fs";
 const BASE = process.env.BASE || "http://localhost:5180";
 const [w, h] = (process.argv[2] || "390x844").split("x").map(Number);
 const dark = process.argv.includes("--dark");
 const out = new URL(`../shots/${w}${dark ? "-dark" : ""}/`, import.meta.url).pathname; mkdirSync(out, { recursive: true });
-const b = await chromium.launch({ executablePath: "/usr/bin/google-chrome" });
+const b = await chromium.launch({ executablePath: process.env.CHROME || "/usr/bin/google-chrome" });
 const mk = async () => { const c = await b.newContext({ viewport: { width: w, height: h }, hasTouch: w < 1000, isMobile: w < 1000, deviceScaleFactor: 2, colorScheme: dark ? "dark" : "light" }); const p = await c.newPage(); p.on("pageerror", (e) => errs.push(String(e))); return p; };
 const errs = []; let n = 0;
 const shot = async (p, name) => { await p.waitForTimeout(700); const ov = await p.evaluate(() => document.documentElement.scrollWidth - innerWidth); if (ov > 0) errs.push(`${name} overflow ${ov}`); await p.screenshot({ path: `${out}${String(n++).padStart(2, "0")}-${name}.png` }); };

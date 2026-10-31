@@ -7,9 +7,17 @@
   "scripts": {
     "start": "node --no-warnings server.mjs",
     "dev": "node --no-warnings --watch server.mjs",
-    "sample": "node scripts/make-sample.mjs",
-    "test:edges": "node --no-warnings test/edges.mjs", "test": "node --no-warnings test/e2e.mjs"
+    "test": "node --no-warnings test/e2e.mjs",
+    "test:edges": "node --no-warnings test/edges.mjs",
+    "test:rules": "node --no-warnings test/rules.mjs",
+    "test:ui": "node --no-warnings test/ui-edges.mjs",
+    "test:flow": "node --no-warnings test/ui-flow.mjs"
   },
-  "engines": { "node": ">=22.5" },
-  "license": "MIT"
+  "engines": {
+    "node": ">=22.5"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "playwright-core": "1.64.1"
+  }
 }

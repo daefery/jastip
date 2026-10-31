@@ -1,71 +1,136 @@
-# PayPal Jastip
+<p align="center"><img src="app/public/img/brand/og.jpg" alt="Jastip: shop abroad for friends. PayPal holds a max price. One receipt sets the exact charge." width="720"></p>
 
-Working name. A traveller buys things abroad for friends. Each friend approves a PayPal hold up
-to their price cap, the traveller photographs one shop receipt, and each friend is charged their
-exact share when they receive the item. Items not found are released straight away.
+# Jastip
 
-Status: risk spikes (30 Oct 2026). Spike 1 passed in sandbox. No app yet.
+**Shop abroad for friends. No one pays upfront, no one is overcharged.**
 
-## Spike 1: PayPal holds (`spikes/paypal-holds.mjs`)
+*Jastip* (Indonesian, from *jasa titip*, "carry-for-me service") is how millions of people get
+things from abroad: a friend travels, everyone asks for something, and money moves on trust.
+Today someone always fronts the money. Either friends pay upfront for items that may be sold out,
+or the traveller pays for everything and chases friends afterwards.
 
-Checks on the PayPal sandbox, in JPY: authorize up to a cap, capture an exact smaller amount,
-void a hold, and what reauthorize does inside the 3-day honor period.
+Jastip fixes the money part with PayPal:
+
+1. A friend asks for an item and sets a **max price**. AI turns a pasted link or slang into the
+   item name and a rough shelf price.
+2. The friend approves a **PayPal hold** for the max + the traveller's fee. Nothing is charged.
+3. The traveller shops and photographs **one receipt**. AI reads every line and matches lines to asks.
+4. Code charges each friend **their exact line + fee** (PayPal partial capture) and **releases**
+   every hold for items that weren't found (PayPal void). The AI never sets an amount.
+5. Each friend taps **I got my item** at handover: a delivery record for both sides.
+
+**Live demo: https://jastip.feryyp-work.workers.dev** (PayPal sandbox, nothing real is charged)
+
+## For judges
+
+**Try it (about 5 minutes, two browser windows):**
+
+1. Window 1, the traveller: open the live demo, enter a name, tap **New trip**, pick **Tokyo**,
+   then **Share trip link** → copy.
+2. Window 2, a friend (a private/incognito window, or another browser): open the link, enter a
+   name, type `matcha kitkat`, tap **Find**, keep the max price, tap **Ask**.
+3. Traveller: **Accept**, then **Pick shopping day**.
+4. Friend: **Hold with PayPal** → log in with the sandbox buyer below → approve.
+   Back in the app: "Hold approved. ¥0 charged."
+5. Traveller: **Start shopping** → **Found** → **Pay & scan receipt** → **Use sample receipt**
+   (a Don Quijote Tokyo receipt) → check the charges → **Charge**.
+   The friend sees the exact charge and how much of the hold was never taken; then **I got my item**.
+
+**PayPal sandbox buyer (test money only):** see the testing instructions on the Devpost
+submission. Any PayPal sandbox *personal* account also works.
+
+**What to look at:** the app works on phone, tablet and desktop (try the friend on a phone).
+The traveller's trip screen lists every PayPal and AI call in **PayPal & AI activity**.
+
+## How PayPal is used
+
+| Step | PayPal API |
+|---|---|
+| Friend approves a hold | Orders v2 `POST /v2/checkout/orders` (`intent: AUTHORIZE`, payee = traveller), then `POST /v2/checkout/orders/{id}/authorize` |
+| Exact charge from the receipt | Payments v2 `POST /v2/payments/authorizations/{id}/capture`, amount = receipt line + fee, `final_capture: true`, idempotency key per hold |
+| Item not found, swap skipped, nothing bought | Payments v2 `POST /v2/payments/authorizations/{id}/void` |
+
+Holds are opened per shopping day and charged at the receipt, inside PayPal's 3-day honor period.
+We measured that reauthorize is only allowed once, from day 4 to day 29
+(`REAUTHORIZATION_TOO_SOON` on day 1), so holds are not opened at trip booking.
+See [`spikes/README.md`](spikes/README.md).
+
+## How AI is used
+
+| Where | Model | What it does |
+|---|---|---|
+| Ask screen | Cloudflare Workers AI, `@cf/google/gemma-4-26b-a4b-it` | Turns a pasted TikTok/shop link or slang ("matcha kitkat otona") into an item name, variant and a rough local shelf price, used to suggest the max price |
+| Receipt | same model (vision) | Reads every receipt line (Japanese, Indonesian, English, discounts) and says which line answers which ask, with a confidence |
+| Settlement | **code, not AI** | Folds discounts into the line above, caps each charge at the friend's max (or the agreed swap price), adds the fee, never more than the hold. Lines matched to no ask are voided |
+
+Measured on 5 synthetic receipts / 20 asks: Gemma 4 on Workers AI 19/20 (about 10 to 12 s per
+receipt live). The one miss is a decoy item; the traveller sees every match before anything is
+charged, and an item marked Found that isn't on the receipt is flagged with **Retake photo** first.
+
+## Safety rules (enforced in `app/lib/trips.mjs`)
+
+| | Rule |
+|---|---|
+| S1 | No hold, no shopping: only asks with an approved hold go on the list |
+| S2 | A charge is never above the hold, and never above the receipt line + fee |
+| S3 | A charge needs a receipt line matched to that ask; everything else is released |
+| S4 | A friend can withdraw only before the hold |
+| S5 | The traveller accepts each ask before anyone is asked to hold money |
+| S6 | A new friend can hold at most $50 in total until a first handover, unless the traveller taps "I know them" |
+| S7 | One capture per hold (idempotency key + status check); a retry repeats the saved step, never a new one |
+| S8 | Swaps need the friend's tap and can't exceed the max |
+
+Failure handling, all tested: if PayPal fails mid-settlement, each friend's confirmed charge or
+release is saved first and **Retry** repeats only the unconfirmed steps with the same amounts; a
+receipt plan made before the shopping list changed is refused; a PayPal approval that lands after
+shopping started (or after the ask was withdrawn) is recorded and released, never lost.
+
+Not covered: false "not received" disputes after handover (the handover record and receipt are
+kept as evidence, the Disputes API is not wired up), and real sign-in (names only; the session is
+an opaque random token).
+
+## Run it yourself
+
+Node 22.5+, no runtime dependencies. See [`app/README.md`](app/README.md) for local run,
+Cloudflare deploy and all tests.
 
 ```sh
-cp .env.example .env        # add sandbox PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET
-node spikes/paypal-holds.mjs              # JPY
-node spikes/paypal-holds.mjs --currency USD
+cp .env.example .env          # PayPal sandbox app keys + an OpenAI-compatible vision endpoint
+cd app && npm start           # http://localhost:5180
 ```
 
-The script prints three approval links. Open each one logged in as the sandbox Personal (buyer)
-account, approve, then press Enter.
+Tests: `npm test` (29 end-to-end checks against the real PayPal sandbox, needs
+`SANDBOX_BUYER_EMAIL`/`SANDBOX_BUYER_PASSWORD`), `npm run test:edges` (failure and race cases),
+`npm run test:ui` (browser edge cases), `npm run test:flow` (full 4-person flow at any screen size).
+The browser tests need `npm install` (dev dependency `playwright-core`) and Chrome (`CHROME=/path`).
 
-Result, 30 Oct 2026, JPY, buyer = sandbox Personal account with country ID (Indonesia),
-log in `spikes/results-2026-10-30T02-48-51-848Z.json` (not committed):
+## Built with
 
-| Friend | Hold | Action | PayPal result |
-|---|---|---|---|
-| Ayu | ¥1,500 | capture exact share ¥1,188, final | 201 COMPLETED, auth CAPTURED, fee ¥80, net USD 6.83 |
-| Bima | ¥1,800 | void (item not found) | 200 VOIDED |
-| Citra | ¥1,200 | reauthorize on day 1 | 422 `REAUTHORIZATION_TOO_SOON` |
-| Citra | ¥1,200 | then capture ¥968, final | 201 COMPLETED, auth CAPTURED, fee ¥73, net USD 5.51 |
+PayPal Orders v2 and Payments v2 (sandbox) · Cloudflare Workers, D1 and Workers AI (Gemma 4) ·
+plain JavaScript (no framework, no runtime dependencies) · `qrcode-generator` (MIT, vendored).
 
-Findings:
-- Capturing less than the hold works in JPY; partial capture was already on for the sandbox account.
-- An Indonesian buyer account can approve a JPY hold.
-- The API error says reauthorize is allowed **once**, from day 4 to day 29: "A reauthorization is
-  only allowed once from Day 4 to Day 29 since the date of the original authorization." The docs
-  page says "multiple". Design for one reauthorize, so a hold opens on the shopping day, not at trip booking.
-- PayPal took ¥80 on ¥1,188 (6.7%) and ¥73 on ¥968 (7.5%) in fees, and converted the rest to the
-  merchant account's USD. The jastip fee has to cover this.
+## AI tools statement
 
-Facts from PayPal docs, checked 30 Oct 2026 ([auth and honor period](https://developer.paypal.com/payment-methods/auth-honor),
-[reauthorize](https://developer.paypal.com/api/payments/v2/authorizations-reauthorize),
-[currency codes](https://developer.paypal.com/api/rest/reference/currency-codes/)):
-- A hold lasts 29 days; capture is most reliable in the first 3 days (honor period).
-- Reauthorize is allowed from day 4 to day 29 and restarts the 3-day honor period.
-- Capture can be less than the hold. Partial capture on PayPal-account holds must be enabled on the account.
-- JPY has no decimals; sending a decimal amount is an error.
+- **Gemma 4 26B** (`@cf/google/gemma-4-26b-a4b-it`, Cloudflare Workers AI): in the product, for
+  item lookup and receipt reading as described above.
+- **Gemini 3.8 Flash**: in the product when run locally (any OpenAI-compatible vision endpoint
+  works), and to compare models during the receipt spike.
+- **OpenAI image generation** (through the Codex CLI): all illustrations, avatars, the app icon
+  and the hero image in `app/public/img/` (see [`app/public/img/README.md`](app/public/img/README.md)).
+- **AI coding agents** (Claude via the pi coding agent; GPT via pi for independent code and UX
+  review rounds, saved in `council/`): used to write and review code, tests and docs. The product
+  idea, the PayPal flow, the safety rules and every design decision were made and checked by the author.
 
-## Spike 2: receipt matching (`spikes/receipt-match.mjs`)
+## Repository
 
-The model only transcribes the receipt lines and picks which line answers which request.
-Code folds discount lines into the item above them, splits separately printed tax by amount,
-and computes each share.
+| Path | What |
+|---|---|
+| `app/` | The app: `lib/` (API, rules, PayPal, AI, DB), `public/` (UI), `test/`, `migrations/` |
+| `spikes/` | The two risk spikes run before building (PayPal holds in JPY, receipt matching) |
+| `receipts/` | Synthetic test receipts and their generator |
+| `design/`, `proto/` | Design research and clickable prototypes explored before the app |
+| `council/` | Independent review rounds of the app (findings and fixes) |
 
-Test set so far: 5 SYNTHETIC receipts made by `receipts/make-synthetic.mjs` (Japanese and
-Indonesian, tax included and excluded, line discounts, decoy items), 20 requests in total.
-They are typed, not photographed, so they prove nothing about real camera photos.
+## License
 
-| Model | Run 1 | Run 2 | Run 3 | Time per receipt |
-|---|---|---|---|---|
-| gemini-3.8-flash-high | 20/20 | 20/20 | 20/20 | 8 to 22 s |
-| gemini-3-flash | 19/20 | 19/20 | 19/20 | 2 to 4 s |
-| claude-sonnet-4-6 | 19/20 | 19/20 | 19/20 | 6 to 14 s |
-
-The miss in both 19/20 rows is the same decoy: "silicone food container" was matched to a
-silicone strainer. Confidence did not flag it (0.8 and 0.35), so the friend must still confirm
-the item at handover before any capture.
-
-Next: replace the synthetic set with at least 10 real receipt photos in `receipts/cases/`
-(same JSON shape, `"synthetic": false`).
+[MIT](LICENSE)

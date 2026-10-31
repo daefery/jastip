@@ -3,14 +3,14 @@
 //  - the step advanced after each click
 //  - the money rail numbers at the end (Ayu captured ¥1,288 of ¥1,600, Dewi voided)
 // Run: node test/walk.mjs 390x844 | 1440x900 | 768x1024 ...
-import { chromium } from "/home/feryyp/.agents/skills/adaptive-ux/scripts/node_modules/playwright-core/index.mjs";
+import { chromium } from "playwright-core";
 import { mkdirSync } from "node:fs";
 
 const [w, h] = (process.argv[2] || "390x844").split("x").map(Number);
 const file = new URL("../jastip-flow.html", import.meta.url).pathname;
 const dir = new URL(`../shots/${w}/`, import.meta.url).pathname;
 mkdirSync(dir, { recursive: true });
-const b = await chromium.launch({ executablePath: "/usr/bin/google-chrome" });
+const b = await chromium.launch({ executablePath: process.env.CHROME || "/usr/bin/google-chrome" });
 const touch = w < 1024;
 const p = await b.newPage({ viewport: { width: w, height: h }, hasTouch: touch, isMobile: touch });
 const errs = [];
