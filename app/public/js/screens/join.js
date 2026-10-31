@@ -2,7 +2,7 @@
 import { api, ic, esc, av, toast, busy, pic, cat, dateRange } from "../ui.js";
 import { topbar, store, refreshMe, owns } from "../app.js";
 import { sceneHTML, skyOf } from "../scenes.js";
-import { fmt, toMinor, step, CUR } from "../money.js";
+import { fmt, toMinor, step, CUR, usd, NEW_FRIEND_USD } from "../money.js";
 
 export async function joinView(app, code, route = store.route) {
   // every await below re-checks that this page still owns the screen before painting
@@ -28,6 +28,8 @@ export async function joinView(app, code, route = store.route) {
     return;
   }
 
+  // S6: before a first handover, asks over the limit need the traveller to confirm they know you
+  const needsVouch = (hold) => !(store.me?.kept > 0) && usd(hold, t.currency) > NEW_FRIEND_USD;
   const st = { source: "", title: "", detail: "", art: "other", typical: 0, cap: unit * 10, rule: "ask", found: false };
   const draw = () => {
     const hold = st.cap + t.fee;
@@ -45,6 +47,7 @@ export async function joinView(app, code, route = store.route) {
         <div class="maxbox"><div><b class="num" id="capv">${fmt(st.cap, t.currency)}</b><span>+ ${fmt(t.fee, t.currency)} fee · hold up to <span id="holdv" class="num" style="font-weight:700;color:var(--ink)">${fmt(hold, t.currency)}</span></span></div>
           <div class="stepper"><button type="button" data-d="-1" aria-label="Lower max">−</button><button type="button" data-d="1" aria-label="Raise max">+</button></div></div>
         <p class="hint">If the shelf price is higher, ${esc(owner.name)} won't buy it.</p>
+        <p class="hint vouch" data-vouch ${needsVouch(hold) ? "" : "hidden"}>${ic("shield")}<span>That's about $<b data-usd>${Math.round(usd(hold, t.currency))}</b>, over the $${NEW_FRIEND_USD} first-trip limit. That's fine: ${esc(owner.name)} just confirms they know you when accepting.</span></p>
         <div class="sec-t"><span>If it's sold out</span></div>
         <div class="seg" role="group" aria-label="If sold out">${[["ask", "Ask me", "pick a swap"], ["similar", "Similar ok", "within my max"], ["skip", "Skip", "release my hold"]].map(([v, l, s]) => `<button type="button" data-rule="${v}" aria-pressed="${st.rule === v}">${l}<small>${s}</small></button>`).join("")}</div>` : ""}
       </div>
@@ -85,6 +88,7 @@ export async function joinView(app, code, route = store.route) {
       app.querySelector("#capv").textContent = fmt(st.cap, t.currency);
       app.querySelector("#holdv").textContent = fmt(st.cap + t.fee, t.currency);
       app.querySelectorAll("[data-hold2]").forEach((x) => (x.textContent = fmt(st.cap + t.fee, t.currency)));
+      const vv = app.querySelector("[data-vouch]"); vv.hidden = !needsVouch(st.cap + t.fee); vv.querySelector("[data-usd]").textContent = Math.round(usd(st.cap + t.fee, t.currency));
     });
     app.querySelectorAll("[data-rule]").forEach((b) => b.onclick = () => { st.rule = b.dataset.rule; app.querySelectorAll("[data-rule]").forEach((x) => x.setAttribute("aria-pressed", x === b)); });
     const send = async (btn) => {

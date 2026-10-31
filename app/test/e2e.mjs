@@ -70,7 +70,7 @@ for (const [who, r] of [[ayu, a], [bima, b], [citra, c], [citra, c2]]) {
   holds[r.id] = h.approve;
 }
 const tooBig = await citra.call(`/api/requests/${big.id}/hold`, {});
-ok(tooBig.status === 409 && /New friends/.test(tooBig.error), "S6 new friend can't hold more than $50 in total", tooBig.error);
+ok(tooBig.status === 409 && /new-friend limit/.test(tooBig.error), "S6 new friend can't hold more than $50 in total", tooBig.error);
 
 // S4: once held, a friend can't withdraw (checked after approval below)
 if (!BUYER || !PASS) { console.log("\nSet SANDBOX_BUYER_EMAIL and SANDBOX_BUYER_PASSWORD to run the PayPal approval part."); process.exit(1); }

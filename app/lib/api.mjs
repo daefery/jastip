@@ -75,7 +75,7 @@ export function makeApi(db, { saveImage } = {}) {
     catch { return { title: String(b.text).replace(/https?:\/\/\S+/g, "").trim().slice(0, 40) || "Item", detail: "", typical: 0, art: "other", ai: false }; }
   });
   on("DELETE", "/api/requests/:rid", async (req, p) => { await T.withdraw(await tripOfReq(p.rid), await needMe(req), p.rid); return { ok: true }; });
-  on("POST", "/api/requests/:rid/decide", async (req, p) => { await T.decide(await tripOfReq(p.rid), await needMe(req), p.rid, !!(await body(req)).accept); return { ok: true }; });
+  on("POST", "/api/requests/:rid/decide", async (req, p) => { const b = await body(req); await T.decide(await tripOfReq(p.rid), await needMe(req), p.rid, !!b.accept, !!b.vouch); return { ok: true }; });
   on("POST", "/api/trips/:tid/day", async (req, p) => { await T.setShopDay(await needTrip(p.tid), await needMe(req), (await body(req)).day); return { ok: true }; });
   on("POST", "/api/requests/:rid/hold", async (req, p) => T.startHold(await tripOfReq(p.rid), await needMe(req), p.rid, origin(req)));
   on("POST", "/api/trips/:tid/shop", async (req, p) => { await T.startShopping(await needTrip(p.tid), await needMe(req)); return { ok: true }; });

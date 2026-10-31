@@ -6,7 +6,8 @@
 //  S3  A charge needs a receipt line matched to that request; unmatched requests are voided.
 //  S4  Friends can withdraw a request only before their hold is approved.
 //  S5  The traveller accepts each request before anyone is asked for a hold.
-//  S6  A new friend (no completed handover) can hold at most NEW_FRIEND_USD in total.
+//  S6  A new friend (no completed handover) can hold at most NEW_FRIEND_USD in total, unless the
+//      traveller confirms they know them for that ask ("vouched").
 //  S7  One capture per hold (idempotent PayPal-Request-Id + status check).
 //  S8  Swaps need the friend's tap, and a swap above the cap is refused.
 import { id, now } from "./db.mjs";
@@ -79,13 +80,14 @@ export function makeTrips(db, pp = paypal) {
     await log(t.id, rid, "trip", `${friend.name} withdrew`, r.title);
   }
 
-  async function decide(t, owner, rid, accept) { // S5
+  async function decide(t, owner, rid, accept, vouch = false) { // S5
     if (!isOwner(t, owner)) throw new Rule("Only the traveller decides", 403);
     const r = await request(rid);
     if (!r || r.trip_id !== t.id || !["asked", "accepted", "declined"].includes(r.status)) throw new Rule("Can't change this request");
-    const ok = await run(`UPDATE requests SET status=? WHERE id=? AND status IN ('asked','accepted','declined')
-      AND EXISTS (SELECT 1 FROM trips WHERE id=? AND status IN ('open','holds'))`, accept ? "accepted" : "declined", rid, t.id);
+    const ok = await run(`UPDATE requests SET status=?, vouched=CASE WHEN ?=1 THEN 1 ELSE vouched END WHERE id=? AND status IN ('asked','accepted','declined')
+      AND EXISTS (SELECT 1 FROM trips WHERE id=? AND status IN ('open','holds'))`, accept ? "accepted" : "declined", accept && vouch ? 1 : 0, rid, t.id);
     if (!ok.changes) throw new Rule("Shopping has already started");
+    if (accept && vouch) await log(t.id, rid, "trip", `${owner.name} knows ${await nameOf(r.friend_id)}`, "new-friend limit lifted for this ask");
   }
 
   async function setShopDay(t, owner, day) {
@@ -98,7 +100,7 @@ export function makeTrips(db, pp = paypal) {
 
   async function heldUsd(friend) {
     const rows = await all(`SELECT r.hold, t.currency FROM requests r JOIN trips t ON t.id=r.trip_id
-                      WHERE r.friend_id=? AND r.auth_id IS NOT NULL AND r.status IN ${OUT_SQL}`, friend.id);
+                      WHERE r.friend_id=? AND r.auth_id IS NOT NULL AND r.vouched=0 AND r.status IN ${OUT_SQL}`, friend.id);
     return rows.reduce((s, x) => s + usd(x.hold, x.currency), 0);
   }
 
@@ -110,8 +112,8 @@ export function makeTrips(db, pp = paypal) {
     if (t.status !== "holds") throw new Rule("The traveller hasn't set a shopping day yet");
     const hold = holdOf(t, r);
     const fresh = await user(friend.id);
-    if ((fresh.kept || 0) === 0 && (await heldUsd(friend)) + usd(hold, t.currency) > NEW_FRIEND_USD) // S6
-      throw new Rule(`New friends can hold up to $${NEW_FRIEND_USD} until their first handover`);
+    if ((fresh.kept || 0) === 0 && !r.vouched && (await heldUsd(friend)) + usd(hold, t.currency) > NEW_FRIEND_USD) // S6
+      throw new Rule(`Over the $${NEW_FRIEND_USD} new-friend limit. ${await nameOf(t.owner_id)} has to confirm they know you first.`);
     if (!pp.paypalReady()) throw new Rule("PayPal is not configured on this server", 503);
     const o = await pp.createHold({
       requestId: r.id, amount: hold, cur: t.currency, title: r.title, travellerName: await nameOf(t.owner_id), payeeEmail: t.payee_email,
@@ -346,7 +348,8 @@ export function makeTrips(db, pp = paypal) {
     for (const r of raw) if (!people.has(r.friend_id)) people.set(r.friend_id, await user(r.friend_id));
     const reqs = raw.map((r) => {
       const f = people.get(r.friend_id);
-      return { ...r, friend: { id: f.id, name: f.name, color: f.color, kept: f.kept }, hold_needed: holdOf(t, r), order_id: undefined, mineReq: r.friend_id === viewer.id };
+      const needs_vouch = !f.kept && !r.vouched && !r.auth_id && usd(holdOf(t, r), t.currency) > NEW_FRIEND_USD; // S6, per ask
+      return { ...r, friend: { id: f.id, name: f.name, color: f.color, kept: f.kept }, hold_needed: holdOf(t, r), hold_usd: Math.round(usd(holdOf(t, r), t.currency)), needs_vouch, order_id: undefined, mineReq: r.friend_id === viewer.id };
     }).filter((r) => mine || r.mineReq);
     const events = (await all("SELECT * FROM events WHERE trip_id=? ORDER BY id DESC LIMIT 40", t.id))
       .filter((e) => mine || !e.request_id || reqs.some((r) => r.id === e.request_id));

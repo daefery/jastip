@@ -416,4 +416,23 @@ async function shopping(names) {
   failVoid.clear(); await T.retry(await tripOf(s9.tid), s9.dina);
   ok((await T.request(s9.people[1].r.id)).status === "released" && (await tripOf(s9.tid)).status === "settled" && (await T.request(s9.people[0].r.id)).charged === 900, "B released later, A unchanged, trip settled");
 }
+
+// 23. S6 vouching: the traveller can lift the new-friend limit for one ask only
+{
+  const dv = await T.createUser("Dina");
+  const tv = await T.createTrip(dv, { home: "J", home_code: "CGK", city: "Singapore", city_code: "SIN", currency: "SGD", depart: d(1), ret: d(5), fee: 500, payee_email: null });
+  const g = await T.createUser("Gita");
+  const big = await T.addRequest(await tripOf(tv.id), g, { title: "Dyson", cap: 100000 });
+  const big2 = await T.addRequest(await tripOf(tv.id), g, { title: "Dyson 2", cap: 100000 });
+  ok((await T.view(await tripOf(tv.id), dv)).requests.find((x) => x.id === big.id).needs_vouch, "SG$1,005 from a new friend is flagged needs_vouch");
+  await T.decide(await tripOf(tv.id), dv, big.id, true, true);
+  await T.decide(await tripOf(tv.id), dv, big2.id, true, false);
+  await T.setShopDay(await tripOf(tv.id), dv, "Mon");
+  const h = await T.startHold(await tripOf(tv.id), g, big.id, "http://x"); await T.finishHold(big.id);
+  ok(!!h.approve, "vouched ask can be held");
+  let e; try { await T.startHold(await tripOf(tv.id), g, big2.id, "http://x"); } catch (x) { e = x; }
+  ok(e && /confirm they know you/.test(e.message), "the other, not vouched, ask is still capped", e?.message);
+  let e2; try { await T.decide(await tripOf(tv.id), g, big2.id, true, true); } catch (x) { e2 = x; }
+  ok(e2?.code === 403, "a friend can't vouch for themselves");
+}
 console.log(`\n${res.filter(Boolean).length}/${res.length} passed`); process.exit(res.every(Boolean) ? 0 : 1);

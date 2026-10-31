@@ -1,6 +1,6 @@
 // The tracker. Friend = an order (Uber Eats). Traveller = courier mode (Instacart Shopper).
 // Every number is from the server; every money move goes through the API (PayPal on the server).
-import { api, ic, esc, av, toast, busy, sheet, pic, qrSvg, dateRange, when } from "../ui.js";
+import { api, ic, esc, av, toast, busy, sheet, ask, pic, qrSvg, dateRange, when } from "../ui.js";
 import { topbar, store, owns, moneyLine } from "../app.js";
 import { sceneHTML, skyOf } from "../scenes.js";
 import { fmt, OUTSTANDING } from "../money.js";
@@ -57,7 +57,7 @@ function friendState(r, t, owner) {
     sub: `${r.status === "releasing" && !withdrawnLate ? `${o} had already started shopping. ` : ""}Nothing will be charged. PayPal hasn't confirmed the release yet; ${o} can retry it from the trip.`,
     money: { value: 0, note: `release of ${fmt(hold, cur)} awaiting PayPal`, fill: 100, color: "#c7c7cc" } });
   switch (r.status) {
-    case "asked": Object.assign(S, { title: `Waiting for ${o}`, sub: `${o} checks your max price before anyone holds money.`, act: `<button class="btn red" data-withdraw>${ic("trash")}Withdraw ask</button>` }); break;
+    case "asked": Object.assign(S, { title: `Waiting for ${o}`, sub: r.needs_vouch ? `It's over $50, so ${o} also confirms they know you. Nothing is held yet.` : `${o} checks your max price before anyone holds money.`, act: `<button class="btn red" data-withdraw>${ic("trash")}Withdraw ask</button>` }); break;
     case "declined": Object.assign(S, { title: `${o} can't take this one`, sub: "Nothing was held or charged.", scene: "released" }); break;
     case "dropped": Object.assign(S, { title: "Not included in shopping", sub: `No hold was approved before ${o} went shopping. Nothing was held or charged.`, scene: "released" }); break;
     case "accepted":
@@ -135,7 +135,7 @@ function order({ app, v, cur, reload }, rid) {
   const on = (sel, fn) => app.querySelectorAll(sel).forEach((b) => b.addEventListener("click", () => fn(b)));
   const act = async (b, fn, ok) => { busy(b, true); try { await fn(); if (ok) toast(ok); reload(); } catch (e) { busy(b, false); toast(e.message, "err"); } };
   on("[data-withdraw]", async (b) => {
-    if (!confirm("Withdraw this ask?")) return;
+    if (!(await ask({ title: "Withdraw this ask?", body: `<p>${esc(titleOf(r))} comes off ${esc(v.owner.name)}'s list. Nothing has been held or charged.</p>`, yes: "Withdraw", no: "Keep it", tone: "red", icon: "trash" }))) return;
     busy(b, true);
     try { await api(`/api/requests/${r.id}`, { method: "DELETE" }); toast("Ask withdrawn"); location.hash = "#/"; }
     catch (e) { busy(b, false); toast(e.message, "err"); }
@@ -261,7 +261,7 @@ function courier({ app, v, cur, reload }, openShare) {
   }
 
   const pendingRow = (r) => `<span class="rt num" style="color:var(--orange)">${r.plan_op === "capture" ? fmt(r.plan_charge, cur) : fmt(0, cur)}<small>${r.plan_op === "capture" ? "charge awaiting PayPal" : `release of ${fmt(r.hold, cur)} awaiting PayPal`}</small></span>`;
-  const row = (r, right) => `<div class="jr">${pic(r.art, 48)}<div style="min-width:0"><b class="wrap2">${esc(titleOf(r))}</b><div class="s">${av(r.friend, 18)}<em>${esc(r.friend.name)}</em></div><div class="s2">${[`<strong class="num">max ${fmt(r.cap, cur)}</strong>`, r.detail && esc(r.detail), r.rule === "similar" && "similar ok", r.rule === "skip" && "skip if sold out"].filter(Boolean).join(" · ")}</div></div>${right}</div>`;
+  const row = (r, right) => `<div class="jr">${pic(r.art, 48)}<div style="min-width:0"><b class="wrap2">${esc(titleOf(r))}</b><div class="s">${av(r.friend, 18)}<em>${esc(r.friend.name)}${r.needs_vouch && r.status === "asked" ? ` · <span style="color:var(--orange)">new friend, over $50</span>` : r.vouched ? " · you know them" : ""}</em></div><div class="s2">${[`<strong class="num">max ${fmt(r.cap, cur)}</strong>`, r.detail && esc(r.detail), r.rule === "similar" && "similar ok", r.rule === "skip" && "skip if sold out"].filter(Boolean).join(" · ")}</div></div>${right}</div>`;
   const group = (label, xs, right) => (xs.length ? `<div class="group">${label}<span>${xs.length}</span></div>${xs.map((r) => row(r, right(r))).join("")}` : "");
   if (t.status === "open") {
     body = group("New asks", asked, (r) => `<div class="tbtn-row"><button class="tbtn x" data-decline="${r.id}" aria-label="Decline ${esc(r.title)}">${ic("x")}</button><button class="tbtn blue" data-accept="${r.id}" aria-label="Accept ${esc(r.title)}">${ic("check")}<span class="lbl">Accept</span></button></div>`)
@@ -315,13 +315,25 @@ function courier({ app, v, cur, reload }, openShare) {
   const on = (sel, fn) => app.querySelectorAll(sel).forEach((b) => b.addEventListener("click", () => fn(b)));
   const act = async (b, fn, ok) => { busy(b, true); try { await fn(); if (ok) toast(ok); reload(); } catch (e) { busy(b, false); toast(e.message, "err"); b.closest(".jr")?.classList.add("shake"); } };
   on("[data-share]", () => shareSheet(v));
-  on("[data-accept]", (b) => act(b, () => api(`/api/requests/${b.dataset.accept}/decide`, { body: { accept: true } }), "Accepted"));
+  // S6: a new friend's ask over the limit needs the traveller to say they know them
+  const vouchOk = (xs) => {
+    const big = xs.filter((r) => r.needs_vouch);
+    if (!big.length) return Promise.resolve(true);
+    const who = [...new Set(big.map((r) => r.friend.name))];
+    return ask({ title: `Do you know ${who.join(" and ")}?`, yes: "I know them · accept", no: "Not yet", icon: "shield",
+      body: `<p>${big.length > 1 ? "These asks are" : "This ask is"} over the $${50} limit for someone who hasn't had a handover with you yet. Accept only if you'd trust them in person.</p>
+        <ul class="list">${big.map((r) => `<li>${av(r.friend, 26)}<span style="min-width:0">${esc(r.friend.name)} · ${esc(r.title)}</span><b style="text-align:right">${fmt(r.hold_needed, cur)}<small style="display:block;color:var(--l2);font-weight:500">≈ $${r.hold_usd}</small></b></li>`).join("")}</ul>` });
+  };
+  const accept = (r) => api(`/api/requests/${r.id}/decide`, { body: { accept: true, vouch: !!r.needs_vouch } });
+  on("[data-accept]", async (b) => { const r = rs.find((x) => x.id === b.dataset.accept); if (await vouchOk([r])) act(b, () => accept(r), "Accepted"); });
   on("[data-decline]", (b) => act(b, () => api(`/api/requests/${b.dataset.decline}/decide`, { body: { accept: false } }), "Declined"));
-  on("[data-acceptall]", (b) => act(b, async () => { for (const r of asked) await api(`/api/requests/${r.id}/decide`, { body: { accept: true } }); }, `Accepted ${asked.length}`));
+  on("[data-acceptall]", async (b) => { if (await vouchOk(asked)) act(b, async () => { for (const r of asked) await accept(r); }, `Accepted ${asked.length}`); });
   on("[data-day]", () => daySheet(v, reload));
-  on("[data-shop]", (b) => {
+  on("[data-shop]", async (b) => {
     const left = [...asked, ...acc];
-    if (left.length && !confirm(`${left.length} ask${left.length > 1 ? "s" : ""} without a hold will be left out:\n${left.map((r) => `· ${r.friend.name}: ${r.title}`).join("\n")}\n\nNothing is held or charged for them. Start shopping?`)) return;
+    if (left.length && !(await ask({ title: "Start shopping?", yes: "Start shopping", no: "Wait for them", icon: "bag",
+      body: `<p>${left.length} ask${left.length > 1 ? "s have" : " has"} no PayPal hold yet and will be left out. Nothing is held or charged for ${left.length > 1 ? "them" : "it"}.</p>
+        <ul class="list">${left.map((r) => `<li>${av(r.friend, 26)}<span>${esc(r.friend.name)} · ${esc(r.title)}</span><b>${fmt(r.cap, cur)}</b></li>`).join("")}</ul>` }))) return;
     act(b, () => api(`/api/trips/${t.id}/shop`, { body: {} }), "Have fun shopping");
   });
   on("[data-mark]", (b) => act(b, () => api(`/api/requests/${b.dataset.mark}/mark`, { body: { what: b.dataset.w } })));
@@ -333,7 +345,10 @@ function courier({ app, v, cur, reload }, openShare) {
     if (bad) { toast(`PayPal hasn't confirmed ${bad} step${bad > 1 ? "s" : ""}. Retry in a minute.`, "err"); return; }
     toast(okMsg);
   });
-  on("[data-finish]", (b) => { if (confirm(`Release every hold? Nothing will be charged.`)) payAct(b, "finish", "All holds released"); });
+  on("[data-finish]", async (b) => {
+    if (await ask({ title: "Finish the trip?", yes: `Release ${fmt(holdSum(nf), cur)}`, no: "Keep shopping", icon: "check",
+      body: `<p>Nothing was found, so every PayPal hold is released. No one is charged and no receipt is needed.</p>` })) payAct(b, "finish", "All holds released");
+  });
   on("[data-retry]", (b) => payAct(b, "retry", "Payments confirmed"));
   on("[data-qr]", () => handoverSheet(v));
   if (openShare) shareSheet(v);

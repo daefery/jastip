@@ -9,6 +9,7 @@ const b = await chromium.launch({ executablePath: "/usr/bin/google-chrome" });
 async function person(name, vp = { width: 390, height: 844 }) {
   const ctx = await b.newContext({ viewport: vp, baseURL: BASE });
   const p = await ctx.newPage(); const errs = []; p.on("pageerror", (e) => errs.push(e.message));
+  p.on("dialog", (x) => { errs.push(`native ${x.type()} dialog: ${x.message()}`); x.dismiss(); });
   await p.goto("/"); await p.evaluate((n) => fetch("/api/me", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: n }) }), name);
   await p.reload();
   const call = (path, body, method) => p.evaluate(async ([path, body, method]) => { const r = await fetch(path, { method: method || (body ? "POST" : "GET"), headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined, redirect: "manual" }); return { status: r.status, ...(await r.json().catch(() => ({}))) }; }, [path, body, method]);
@@ -44,8 +45,9 @@ ok(await ayu.p.locator("[data-withdraw]").locator("visible=true").count() > 0, "
 
 // 13b. withdrawing goes home with no error
 const ayuErr0 = ayu.errs.length;
-ayu.p.once("dialog", (x) => x.accept());
-await ayu.p.locator("[data-withdraw]").locator("visible=true").first().click(); await ayu.p.waitForTimeout(1500);
+await ayu.p.locator("[data-withdraw]").locator("visible=true").first().click(); await ayu.p.waitForSelector(".sheet [data-yes]");
+ok(/Withdraw this ask/.test(await ayu.p.locator(".sheet").innerText()), "withdraw asks in an in-app sheet, not a browser dialog");
+await ayu.p.locator(".sheet [data-yes]").click(); await ayu.p.waitForTimeout(1500);
 ok(ayu.errs.length === ayuErr0 && (await ayu.p.evaluate(() => location.hash)) === "#/", "withdraw goes home without a page error", ayu.errs.slice(ayuErr0).join(" | "));
 
 // 15. a negative fractional fee is refused, the form keeps the value and marks the field
@@ -80,9 +82,9 @@ ok(await dina.p.locator(`[data-accept="${late.id}"]`).locator("visible=true").co
 // 7. never-held ask is "not included", not "released"
 for (const r of [c1, c2]) await approve(citra, r.id);
 await dina.p.goto(`/#/trip/${trip.id}`); await dina.p.reload(); await dina.p.waitForSelector("[data-shop]:not([disabled])");
-let asked = "";
-dina.p.once("dialog", (x) => { asked = x.message(); x.dismiss(); });
-await dina.p.locator("[data-shop]").first().click(); await dina.p.waitForTimeout(500);
+await dina.p.locator("[data-shop]").first().click(); await dina.p.waitForSelector(".sheet [data-yes]");
+const asked = await dina.p.locator(".sheet").innerText();
+await dina.p.locator(".sheet [data-close]").last().click(); await dina.p.waitForTimeout(500);
 ok(/left out/.test(asked) && /Late KitKat/.test(asked) && (await dina.call(`/api/trips/${trip.id}`)).trip.status === "holds", "start shopping warns which asks are left out (cancel keeps holds)", asked.split("\n")[0]);
 await dina.call(`/api/trips/${trip.id}/shop`, {});
 await bima.p.goto(`/#/trip/${trip.id}`); await bima.p.waitForSelector(".trk");
@@ -193,6 +195,31 @@ for (const vp of [{ width: 320, height: 640 }, { width: 768, height: 1024 }, { w
   ok(await vis("[data-receipt]:not([disabled])") === 1 && await vis("[data-retry]") === 1, `${w}px shopping: receipt checkout and Retry both there`);
 }
 
+// S6 in Singapore: a new friend asks SG$1,000; the traveller vouches when accepting; the hold then works
+{
+  const d6 = await person("Dina6"), g6 = await person("Gita");
+  const t6 = (await d6.call("/api/trips", { home_code: "CGK", city_code: "SIN", depart: d(1), ret: d(5), fee: 5 })).trip;
+  const inv6 = (await d6.call(`/api/trips/${t6.id}`)).trip.invite;
+  await g6.p.goto(`/#/join/${inv6}`); await g6.p.reload(); await g6.p.waitForSelector("#src");
+  await g6.p.route("**/api/ai/item", (route) => route.fulfill({ json: { title: "Dyson hair dryer", detail: "", art: "gadget", typical: 800 } }));
+  await g6.p.fill("#src", "dyson"); await g6.p.click("#find"); await g6.p.waitForSelector("[data-vouch]");
+  ok(await g6.p.locator("[data-vouch]").isVisible(), "friend sees the over-$50 note before asking", await g6.p.locator("[data-vouch]").innerText());
+  const r6 = (await g6.call(`/api/join/${inv6}/requests`, { title: "Dyson hair dryer", cap: 1000 })).request;
+  await d6.p.goto(`/#/trip/${t6.id}`); await d6.p.reload(); await d6.p.waitForSelector(`[data-accept="${r6.id}"]`);
+  await d6.p.locator(`[data-accept="${r6.id}"]`).click(); await d6.p.waitForSelector(".sheet [data-yes]");
+  ok(/Do you know Gita/.test(await d6.p.locator(".sheet").innerText()), "accepting a new friend's big ask asks 'Do you know Gita?'");
+  await d6.p.locator(".sheet [data-yes]").click(); await d6.p.waitForTimeout(1200);
+  await d6.call(`/api/trips/${t6.id}/day`, { day: "Mon" });
+  const h6 = await g6.call(`/api/requests/${r6.id}/hold`, {});
+  ok(!!h6.approve, "after vouching, the SG$1,005 hold opens in PayPal", h6.error);
+  // not vouched -> still blocked
+  const k6 = await person("Kiki");
+  const rk = (await k6.call(`/api/join/${inv6}/requests`, { title: "Another dryer", cap: 1000 })).request;
+  await d6.call(`/api/requests/${rk.id}/decide`, { accept: true });
+  const hk = await k6.call(`/api/requests/${rk.id}/hold`, {});
+  ok(hk.status === 409 && /confirm they know you/.test(hk.error), "without vouching the big hold is still refused", hk.error);
+}
+
 // 3. a stranger cannot open the trip
 const zed = await person("Zed");
 ok((await zed.call(`/api/trips/${trip.id}`)).status === 404, "stranger gets 404 on the trip");
@@ -208,8 +235,8 @@ const er = (await e1.call(`/api/join/${code2}/requests`, { title: "Pocky", cap: 
 await d2.call(`/api/requests/${er.id}/decide`, { accept: true }); await d2.call(`/api/trips/${t2.id}/day`, { day: "Mon" });
 await approve(e1, er.id); await d2.call(`/api/trips/${t2.id}/shop`, {}); await d2.call(`/api/requests/${er.id}/mark`, { what: "not_found" });
 await d2.p.goto(`/#/trip/${t2.id}`); await d2.p.waitForSelector("[data-finish]");
-d2.p.once("dialog", (x) => x.accept());
-await d2.p.locator("[data-finish]").first().click(); await d2.p.waitForTimeout(1500);
+await d2.p.locator("[data-finish]").first().click(); await d2.p.waitForSelector(".sheet [data-yes]");
+await d2.p.locator(".sheet [data-yes]").click(); await d2.p.waitForTimeout(1500);
 const st = (await d2.call(`/api/trips/${t2.id}`)).requests[0].status;
 ok(st === "released", "nothing found: Finish releases the hold from the UI", st);
 

@@ -82,7 +82,7 @@ On the live site one full receipt read took 11.6 s. Locally we used Gemini 3.8 F
 | S3 | A charge needs a receipt line matched to that request; the rest is voided |
 | S4 | A friend can withdraw only before the hold is approved |
 | S5 | The traveller accepts each request before anyone is asked to hold money |
-| S6 | A new friend can hold at most $50 in total until a first handover |
+| S6 | A new friend can hold at most $50 in total until a first handover, unless the traveller taps "I know them" when accepting that ask |
 | S7 | One capture per hold (idempotency key + status check) |
 | S8 | Swaps need the friend's tap, and a swap above the max is refused |
 

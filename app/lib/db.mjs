@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS requests (
   swap_title TEXT, swap_price INTEGER, line_text TEXT, price INTEGER,
   order_id TEXT, auth_id TEXT, capture_id TEXT, hold INTEGER, charged INTEGER, released INTEGER,
   authorized_at INTEGER, captured_at INTEGER, delivered_at INTEGER, created_at INTEGER NOT NULL,
-  plan_op TEXT, plan_charge INTEGER, plan_why TEXT
+  plan_op TEXT, plan_charge INTEGER, plan_why TEXT, vouched INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS receipts (
   id TEXT PRIMARY KEY, trip_id TEXT NOT NULL REFERENCES trips(id), image TEXT, model TEXT,
@@ -60,7 +60,7 @@ export async function nodeSqlite(file) {
   db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;" + SCHEMA);
   const cols = db.prepare("PRAGMA table_info(requests)").all().map((c) => c.name);
   if (!cols.includes("rule")) db.exec("ALTER TABLE requests ADD COLUMN rule TEXT NOT NULL DEFAULT 'ask'");
-  for (const [c, ty] of [["plan_op", "TEXT"], ["plan_charge", "INTEGER"], ["plan_why", "TEXT"]])
+  for (const [c, ty] of [["plan_op", "TEXT"], ["plan_charge", "INTEGER"], ["plan_why", "TEXT"], ["vouched", "INTEGER NOT NULL DEFAULT 0"]])
     if (!cols.includes(c)) db.exec(`ALTER TABLE requests ADD COLUMN ${c} ${ty}`);
   const tcols = db.prepare("PRAGMA table_info(trips)").all().map((c) => c.name);
   if (!tcols.includes("receipt_id")) db.exec("ALTER TABLE trips ADD COLUMN receipt_id TEXT");

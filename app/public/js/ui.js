@@ -48,13 +48,13 @@ export function toast(msg, kind = "ok") {
 }
 
 // One sheet at a time. Focus moves in, Esc closes, focus returns. Phone: bottom sheet; tablet+: dialog.
-export function sheet({ title, body, left = "", right, onClose, label }) {
+export function sheet({ title, body, left = "", right, onClose, label, kind = "" }) {
   const host = document.getElementById("sheets");
   host.querySelectorAll(".sheet:not(.closing)").forEach((o) => o._close?.());
   const prev = document.activeElement;
   const scrim = document.createElement("div"); scrim.className = "scrim";
   const el = document.createElement("div");
-  el.className = "sheet"; el.setAttribute("role", "dialog"); el.setAttribute("aria-modal", "true"); el.setAttribute("aria-label", label || title || "Dialog");
+  el.className = `sheet${kind ? " " + kind : ""}`; el.setAttribute("role", "dialog"); el.setAttribute("aria-modal", "true"); el.setAttribute("aria-label", label || title || "Dialog");
   el.innerHTML = `<div class="grab"></div><div class="sh-h">${left || "<span></span>"}<h2>${esc(title || "")}</h2>${right ?? `<button class="lk" data-close>Close</button>`}</div>${body}`;
   host.append(scrim, el);
   const app = document.getElementById("app");
@@ -89,6 +89,19 @@ export function sheet({ title, body, left = "", right, onClose, label }) {
   setTimeout(() => (el.querySelector("[data-primary],input:not([hidden]),button:not([data-close])") || el.querySelector("button"))?.focus({ preventScroll: true }), 320);
   el._close = close;
   return { el, close };
+}
+
+// In-app confirm (replaces window.confirm). Resolves true on the main button, false on cancel/Esc/scrim.
+//   ask({ title, body, yes, no = "Cancel", tone = "dark" | "red", icon })
+export function ask({ title, body = "", yes = "OK", no = "Cancel", tone = "dark", icon = "" }) {
+  return new Promise((done) => {
+    let answered = false;
+    const s = sheet({ title, right: "", label: title, kind: "ask", onClose: () => { if (!answered) done(false); },
+      body: `<div class="ask">${body}</div><div class="ask-btns">
+        <button class="btn ${tone}" data-primary data-yes>${icon ? ic(icon) : ""}${esc(yes)}</button>
+        <button class="btn light" data-close>${esc(no)}</button></div>` });
+    s.el.querySelector("[data-yes]").onclick = () => { answered = true; done(true); s.close(); };
+  });
 }
 
 export function busy(btn, on, label) {
