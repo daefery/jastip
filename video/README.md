@@ -9,6 +9,6 @@ Made entirely from the real app; nothing is mocked.
   **Kokoro TTS** (open model, Apache 2.0, run locally; voice `af_heart`).
 - `cards.html` – the title cards and the frame around the phone footage (brand art from `app/public/img`).
 - `build.mjs` – edits it all: one segment per scene, footage speed fitted to the narration (0.8x–1.3x),
-  burned-in captions, loudness normalised. Output `/tmp/vid/jastip-demo.mp4` (+ `.srt`).
+  burned-in captions, loudness normalised. Footage is captured at 60 fps and retimed from that; scenes and phone switches crossfade (0.35 s / 0.3 s), title cards are still (no zoom). Output `/tmp/vid/jastip-demo.mp4` (+ `.srt`).
 
 No music. All visuals are the app's own screens and its AI-generated illustrations.

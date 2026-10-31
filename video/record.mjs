@@ -155,7 +155,7 @@ try {
     await p.stopRec(); const fr = p.frames_; const end = (Date.now() - t0[p.who]) / 1000;
     const list = fr.map(([f, t], i) => `file '${f}'\nduration ${((fr[i + 1]?.[1] ?? end) - t).toFixed(4)}`).join("\n") + `\nfile '${fr[fr.length - 1][0]}'\n`;
     writeFileSync(`${p.dir_}/list.txt`, `file '${fr[0][0]}'\nduration ${fr[0][1].toFixed(4)}\n` + list);
-    execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", `${p.dir_}/list.txt`, "-vf", "fps=30,scale=780:1688:force_original_aspect_ratio=decrease,pad=780:1688:(ow-iw)/2:0:color=white,format=yuv420p", "-c:v", "libx264", "-crf", "16", "-preset", "medium", `${OUT}/${p.who}.mp4`]);
+    execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", `${p.dir_}/list.txt`, "-vf", "fps=60,scale=780:1688:force_original_aspect_ratio=decrease,pad=780:1688:(ow-iw)/2:0:color=white,format=yuv420p", "-c:v", "libx264", "-crf", "16", "-preset", "medium", `${OUT}/${p.who}.mp4`]);
     await p.ctx.close();
   }
 } catch (e) { console.log("STOPPED:", e.message.split("\n")[0]); }

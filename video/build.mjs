@@ -49,14 +49,19 @@ for (const s of S) {
   const d = Math.max(dur(vo) + 0.25, raw0 / 1.45); s.d = d;
   if (s.card) {
     ff(["-loop", "1", "-t", String(d), "-i", `${W}/${s.n}.png`, "-i", vo,
-      "-filter_complex", `[0]scale=1920:1080,zoompan=z='min(1.0+0.0004*on,1.04)':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1920x1080:fps=30,format=yuv420p[v]`,
+      "-filter_complex", `[0]scale=1920:1080,fps=30,format=yuv420p[v]`,
       "-map", "[v]", "-map", "1:a", "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-t", String(d), out]);
   } else {
     // concat the footage pieces, then stretch to d
-    const parts = s.app.map(([c, a, z], i) => `[${i}:v]trim=start=${a}:end=${z},setpts=PTS-STARTPTS,fps=30,scale=380:822[p${i}]`);
-    const raw = s.app.reduce((t, [, a, z]) => t + (z - a), 0);
+    // pieces inside a scene (one phone, then another) are joined with a short crossfade, like scenes
+    const XP = 0.3;
+    const parts = s.app.map(([c, a, z], i) => `[${i}:v]trim=start=${a}:end=${z},setpts=PTS-STARTPTS,fps=60,scale=380:822:flags=lanczos,settb=1/60[p${i}]`);
+    const raw = s.app.reduce((t, [, a, z]) => t + (z - a), 0) - XP * (s.app.length - 1);
     const k = d / raw; // >1 slows down, <1 speeds up
-    const fc = `${parts.join(";")};${s.app.map((_, i) => `[p${i}]`).join("")}concat=n=${s.app.length}:v=1:a=0,setpts=${k.toFixed(4)}*PTS,format=rgba[ph0];` +
+    let join = "[p0]", acc = s.app[0][2] - s.app[0][1];
+    for (let j = 1; j < s.app.length; j++) { join += `[p${j}]xfade=transition=fade:duration=${XP}:offset=${(acc - XP).toFixed(3)}[q${j}]`; acc += s.app[j][2] - s.app[j][1] - XP; if (j < s.app.length - 1) join += `;[q${j}]`; }
+    const joined = s.app.length > 1 ? `${join};[q${s.app.length - 1}]` : "[p0]";
+    const fc = `${parts.join(";")};${joined}setpts=${k.toFixed(4)}*PTS,fps=30,format=rgba[ph0];` +
       `[${s.app.length + 2}:v]format=gray,scale=380:822[mk];[ph0][mk]alphamerge[ph];` +
       `[${s.app.length}:v]scale=1920:1080[bg];[bg][ph]overlay=x=1258:y=30:shortest=0,format=yuv420p[v]`;
     ff([...s.app.flatMap(([c]) => ["-i", `${V}/clips/${c}.mp4`]), "-loop", "1", "-i", `${W}/${s.n}.png`, "-i", vo, "-loop", "1", "-i", `${W}/mask.png`,
@@ -67,6 +72,8 @@ for (const s of S) {
   segs.push(out);
 }
 
+const X = 0.35; // crossfade between scenes, seconds
+
 // 3. Captions (SRT) from the narration, one cue per sentence, timed by character share.
 let t = 0, srt = "", i = 1;
 const ts = (x) => { const h = Math.floor(x / 3600), m = Math.floor(x / 60) % 60, s2 = Math.floor(x % 60), ms = Math.round((x % 1) * 1000); return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s2).padStart(2, "0")},${String(ms).padStart(3, "0")}`; };
@@ -75,13 +82,20 @@ for (const s of S) {
   const parts = lines[s.n].match(/[^.!?]+[.!?]+/g).map((x) => x.trim());
   const total = parts.reduce((a, p) => a + p.length, 0); let at = t + 0.15;
   for (const p of parts) { const len = speak * p.length / total; srt += `${i++}\n${ts(at)} --> ${ts(at + len)}\n${p}\n\n`; at += len; }
-  t += d;
+  t += d - X;
 }
 writeFileSync(`${W}/captions.srt`, srt);
 
-// 4. Join + burn captions.
-writeFileSync(`${W}/list.txt`, segs.map((f) => `file '${f}'`).join("\n"));
-ff(["-f", "concat", "-safe", "0", "-i", `${W}/list.txt`, "-c", "copy", `${W}/joined.mp4`]);
+// 4. Join with short crossfades (X s) so scene changes don't jump.
+{
+  const ins = segs.flatMap((f) => ["-i", f]); let fc = "", va = "[0:v]", aa = "[0:a]", off = 0;
+  for (let j = 1; j < segs.length; j++) {
+    off += S[j - 1].d - X;
+    fc += `${va}[${j}:v]xfade=transition=fade:duration=${X}:offset=${off.toFixed(3)}[v${j}];${aa}[${j}:a]acrossfade=d=${X}:c1=tri:c2=tri[a${j}];`;
+    va = `[v${j}]`; aa = `[a${j}]`;
+  }
+  ff([...ins, "-filter_complex", fc.slice(0, -1), "-map", va, "-map", aa, "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", `${W}/joined.mp4`]);
+}
 ff(["-i", `${W}/joined.mp4`, "-vf", `subtitles=${W}/captions.srt:force_style='FontName=DejaVu Sans,FontSize=14,PrimaryColour=&H00202020,BackColour=&H00FFFFFF,BorderStyle=4,Outline=0,Shadow=0,MarginV=8,MarginL=40,MarginR=40,Alignment=2,Bold=0'`,
   "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-af", "loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000", "-ac", "2", "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", `${V}/jastip-demo.mp4`]);
 console.log("done", dur(`${V}/jastip-demo.mp4`).toFixed(1), "s");
