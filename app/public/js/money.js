@@ -52,3 +52,12 @@ export function fmt(minor, cur = "JPY") {
   return (minor < 0 ? "−" : "") + c.s + s;
 }
 export const usd = (minor, cur) => toMajor(minor, cur) * (USD_RATE[cur] ?? 1);
+
+// 3D character avatars (public/img/avatars/a01..a16.webp). A user gets a random one at sign-up;
+// older users without one get a stable pick from their id. Background = the image's own colour.
+export const AVATARS = ["#fdd4bf", "#cde0fc", "#fdeebe", "#d7f1e3", "#f0d8f5", "#fdd8c8", "#d6e6fd", "#def3d0", "#fdf0c7", "#e1dbfc", "#fcd4d8", "#d2f0ef", "#fde0c4", "#d7e3f6", "#e4f2dc", "#fadac7"];
+export const avatarOf = (u) => {
+  let n = Number.isInteger(u?.avatar) && u.avatar >= 1 && u.avatar <= AVATARS.length ? u.avatar : 0;
+  if (!n) { let h = 0; for (const ch of String(u?.id || u?.name || "?")) h = (h * 31 + ch.charCodeAt(0)) >>> 0; n = (h % AVATARS.length) + 1; }
+  return { n, src: `/img/avatars/a${String(n).padStart(2, "0")}.webp`, bg: AVATARS[n - 1] };
+};

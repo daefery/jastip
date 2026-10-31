@@ -20,7 +20,8 @@ a{color:inherit;text-decoration:none}
 .num{font-variant-numeric:tabular-nums}
 .vh{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
-.av{display:inline-grid;place-items:center;line-height:1;width:var(--s,32px);height:var(--s,32px);border-radius:99px;background:var(--c,#8e8e93);color:#fff!important;font-weight:700;font-size:calc(var(--s,32px)*.42);flex:none;letter-spacing:0}
+.av{display:inline-grid;place-items:center;line-height:1;width:var(--s,32px);height:var(--s,32px);border-radius:99px;background:var(--c,#e5e5ea);overflow:hidden;flex:none;box-shadow:inset 0 0 0 1px rgba(0,0,0,.04)}
+.av img{width:100%;height:100%;object-fit:cover;display:block}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 
 /* category tiles */
@@ -35,7 +36,7 @@ a{color:inherit;text-decoration:none}
 .top{position:sticky;top:0;z-index:50;height:calc(var(--top) + var(--safe-t));padding-top:var(--safe-t);background:rgba(255,255,255,.92);backdrop-filter:saturate(180%) blur(16px);-webkit-backdrop-filter:saturate(180%) blur(16px);border-bottom:1px solid var(--line)}
 .top-in{display:flex;align-items:center;gap:10px;height:var(--top);max-width:1320px;margin:0 auto;padding:0 12px}
 .brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:17px;letter-spacing:-.3px}
-.brand .logo{width:30px;height:30px;border-radius:9px;background:var(--ink);color:#fff;display:grid;place-items:center;font-size:14px}
+.brand .logo{width:32px;height:32px;border-radius:9px;display:block;box-shadow:0 1px 2px rgba(0,0,0,.08)}
 .top .sp{flex:1}
 .pill-b{display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 14px;border-radius:99px;background:var(--soft);font-weight:600;font-size:14px;white-space:nowrap}
 .pill-b .i{width:18px;height:18px}
@@ -382,3 +383,11 @@ input[type=date].input{padding:0 10px;font-size:16px}
 /* KPI amounts shrink with their box instead of being cut off (S$1,626.00 in a phone third) */
 .kpis .kpi{container-type:inline-size}
 .kpis .kpi b{font-size:clamp(13px,15cqi,19px);text-overflow:clip}
+
+/* brand + avatars */
+.hello .art.hero{max-width:420px;aspect-ratio:16/9;object-fit:cover}
+.avpick{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin:4px 0 14px}
+.avpick button{display:grid;place-items:center;padding:3px;border-radius:99px;min-height:44px}
+.avpick button[aria-checked="true"]{box-shadow:0 0 0 2.5px var(--blue)}
+.avpick .av{--s:min(44px,9vw)}
+@media (max-width:379px){.avpick{grid-template-columns:repeat(4,1fr)}}

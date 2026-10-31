@@ -239,6 +239,22 @@ for (const vp of [{ width: 320, height: 640 }, { width: 768, height: 1024 }, { w
   await d7.p.unroute("**/api/trips/*/receipt");
 }
 
+// Avatars + brand: every person gets a 3D character (no initials), and can change it
+{
+  const z = await person("Zara");
+  await z.p.goto("/#/"); await z.p.reload(); await z.p.waitForSelector("[data-me] .av img");
+  const src = await z.p.getAttribute("[data-me] .av img", "src");
+  ok(/\/img\/avatars\/a\d\d\.webp$/.test(src) && await z.p.evaluate(() => [...document.querySelectorAll(".av")].every((a) => a.querySelector("img") && !a.textContent.trim())), "avatars are 3D characters, no initials", src);
+  ok(await z.p.evaluate(() => { const i = document.querySelector(".brand img.logo"); return !!i && i.complete && i.naturalWidth > 0; }), "brand mark loads in the top bar");
+  await z.p.locator("[data-me]").click(); await z.p.waitForSelector(".avpick");
+  const pickN = src.includes("a05") ? 6 : 5;
+  await z.p.locator(`.avpick [data-av="${pickN}"]`).click(); await z.p.waitForTimeout(800);
+  const me = await z.call("/api/me");
+  ok(me.user.avatar === pickN && (await z.p.getAttribute("[data-me] .av img", "src")).includes(`a0${pickN}`), "picking a character saves it and updates the top bar");
+  ok((await z.call("/api/me/avatar", { avatar: 99 })).status === 400, "unknown character refused");
+  await z.p.keyboard.press("Escape");
+}
+
 // 3. a stranger cannot open the trip
 const zed = await person("Zed");
 ok((await zed.call(`/api/trips/${trip.id}`)).status === 404, "stranger gets 404 on the trip");

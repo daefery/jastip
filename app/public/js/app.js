@@ -2,6 +2,7 @@
 import { api, ic, esc, av, toast, sheet, pic, closeAllSheets } from "./ui.js";
 import { fmt } from "./money.js";
 import { artHTML } from "./scenes.js";
+import { AVATARS, avatarOf } from "./money.js";
 import { tripView } from "./screens/trip.js";
 import { joinView } from "./screens/join.js";
 import { newTripView } from "./screens/new.js";
@@ -19,7 +20,7 @@ export async function refreshMe() {
 export function topbar({ back, title } = {}) {
   const me = store.me;
   return `<header class="top"><div class="top-in">
-    ${back ? `<a class="iconb" href="${back}" aria-label="Back">${ic("back")}</a>` : `<a class="brand" href="#/"><span class="logo">J</span><span>Jastip</span></a>`}
+    ${back ? `<a class="iconb" href="${back}" aria-label="Back">${ic("back")}</a>` : `<a class="brand" href="#/" aria-label="Jastip home"><img class="logo" src="/img/brand/mark.webp" alt="" width="32" height="32"><span>Jastip</span></a>`}
     ${title ? `<b style="font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(title)}</b>` : ""}
     <span class="sp"></span>
     ${store.config?.paypalTest ? `<span class="sandbox">PayPal test mode</span>` : `<span class="sandbox">Sandbox</span>`}
@@ -29,7 +30,7 @@ export function topbar({ back, title } = {}) {
 
 function welcome(next) {
   app.innerHTML = `${topbar()}<main class="hello"><div class="box">
-    ${artHTML("open")}
+    <img class="art hero" src="/img/brand/hero.webp" alt="" width="1200" height="675" decoding="async">
     <h1>Shop abroad for friends.</h1>
     <p>No one pays before you buy.</p>
     <div class="feats">
@@ -109,11 +110,21 @@ function meSheet() {
   const u = store.me;
   const s = sheet({ title: "You", body: `
     <div class="who-row" style="border:0">${av(u, 52)}<div><b style="font-size:18px">${esc(u.name)}</b><span>${u.kept} handover${u.kept === 1 ? "" : "s"} kept</span></div></div>
+    <div class="sec-t" style="margin-top:4px"><span>Your character</span></div>
+    <div class="avpick" role="radiogroup" aria-label="Your character">${AVATARS.map((_, i) => `<button role="radio" aria-checked="${avatarOf(u).n === i + 1}" aria-label="Character ${i + 1}" data-av="${i + 1}">${av({ avatar: i + 1 }, 44)}</button>`).join("")}</div>
     <div class="menu">
       ${store.config?.demoSwitch ? `<button data-switch><span class="ti" style="background:#5e5ce6">${ic("user")}</span><div><b>Switch person</b><span>Demo only: act as someone on this trip</span></div></button>` : ""}
       <a href="#/new" data-close><button style="width:100%"><span class="ti" style="background:#0b0b0b">${ic("plus")}</span><div style="text-align:left"><b>New trip</b><span>Going somewhere?</span></div></button></a>
     </div>
     <p class="hint" style="margin-top:14px">PayPal ${store.config?.paypalTest ? "test mode" : "sandbox"} · AI ${store.config?.ai ? esc(store.config.aiModel) : "off"}</p>` });
+  s.el.querySelectorAll("[data-av]").forEach((b) => b.onclick = async () => {
+    try {
+      await api("/api/me/avatar", { body: { avatar: Number(b.dataset.av) } }); await refreshMe();
+      s.el.querySelectorAll("[data-av]").forEach((x) => x.setAttribute("aria-checked", x === b));
+      s.el.querySelector(".who-row .av").outerHTML = av(store.me, 52);
+      document.querySelectorAll("[data-me] .av").forEach((x) => (x.outerHTML = av(store.me, 34)));
+    } catch (e) { toast(e.message, "err"); }
+  });
   const sw = s.el.querySelector("[data-switch]"); if (sw) sw.onclick = async () => {
     const people = new Map();
     for (const t of [...store.mine, ...store.joined]) { const v = await api(`/api/trips/${t.id}`).catch(() => null); if (!v) continue; people.set(v.owner.id, v.owner); v.requests.forEach((r) => people.set(r.friend.id, r.friend)); }

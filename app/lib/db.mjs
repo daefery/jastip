@@ -6,7 +6,7 @@
 export const SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, color TEXT NOT NULL, created_at INTEGER NOT NULL,
-  kept INTEGER NOT NULL DEFAULT 0
+  kept INTEGER NOT NULL DEFAULT 0, avatar INTEGER
 );
 CREATE TABLE IF NOT EXISTS trips (
   id TEXT PRIMARY KEY, owner_id TEXT NOT NULL REFERENCES users(id),
@@ -62,6 +62,8 @@ export async function nodeSqlite(file) {
   if (!cols.includes("rule")) db.exec("ALTER TABLE requests ADD COLUMN rule TEXT NOT NULL DEFAULT 'ask'");
   for (const [c, ty] of [["plan_op", "TEXT"], ["plan_charge", "INTEGER"], ["plan_why", "TEXT"], ["vouched", "INTEGER NOT NULL DEFAULT 0"]])
     if (!cols.includes(c)) db.exec(`ALTER TABLE requests ADD COLUMN ${c} ${ty}`);
+  const ucols = db.prepare("PRAGMA table_info(users)").all().map((c) => c.name);
+  if (!ucols.includes("avatar")) db.exec("ALTER TABLE users ADD COLUMN avatar INTEGER");
   const tcols = db.prepare("PRAGMA table_info(trips)").all().map((c) => c.name);
   if (!tcols.includes("receipt_id")) db.exec("ALTER TABLE trips ADD COLUMN receipt_id TEXT");
   if (!tcols.includes("settle_id")) db.exec("ALTER TABLE trips ADD COLUMN settle_id TEXT");

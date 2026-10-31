@@ -1,3 +1,4 @@
+import { avatarOf } from "./money.js";
 // UI kit: icons, category tiles, avatars, sheets (bottom sheet on phone, dialog on tablet+), toast, api.
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
@@ -27,7 +28,8 @@ export const ic = (n, c = "i") => `<svg class="${c}" viewBox="0 0 24 24" aria-hi
 const CATS = ["snack", "beauty", "medicine", "drink", "fashion", "gadget", "toy", "other"];
 export const cat = (a) => (CATS.includes(a) ? a : "other");
 export const pic = (a, size) => `<span class="pic c-${cat(a)}"${size ? ` style="--ps:${size}px"` : ""} aria-hidden="true">${ic(cat(a))}</span>`;
-export const av = (u, s) => `<span class="av" style="--c:${esc(u?.color || "#8e8e93")}${s ? `;--s:${s}px` : ""}" aria-hidden="true">${esc((u?.name || "?")[0].toUpperCase())}</span>`;
+// Avatar: the person's 3D character (decorative; their name is always written next to it).
+export const av = (u, s) => { const a = avatarOf(u); return `<span class="av" style="--c:${a.bg}${s ? `;--s:${s}px` : ""}" aria-hidden="true"><img src="${a.src}" alt="" width="96" height="96" loading="lazy" decoding="async"></span>`; };
 
 export async function api(path, opts = {}) {
   const res = await fetch(path, { method: opts.method || (opts.body ? "POST" : "GET"), headers: opts.body ? { "Content-Type": "application/json" } : {}, body: opts.body ? JSON.stringify(opts.body) : undefined });

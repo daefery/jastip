@@ -12,7 +12,7 @@
 //  S8  Swaps need the friend's tap, and a swap above the cap is refused.
 import { id, now } from "./db.mjs";
 import * as paypal from "./paypal.mjs";
-import { fmt, usd, CUSTOMS_USD, NEW_FRIEND_USD, OUTSTANDING } from "../public/js/money.js";
+import { fmt, usd, CUSTOMS_USD, NEW_FRIEND_USD, OUTSTANDING, AVATARS } from "../public/js/money.js";
 const OUT_SQL = `(${OUTSTANDING.map((x) => `'${x}'`).join(",")})`;
 
 const COLORS = ["#ff2d55", "#007aff", "#af52de", "#34c759", "#ff9500", "#5ac8fa", "#ff3b30", "#5856d6"];
@@ -35,8 +35,15 @@ export function makeTrips(db, pp = paypal) {
     const n = String(name || "").trim().slice(0, 24);
     if (!n) throw new Rule("Name needed", 400);
     const uid = id(14);
-    await run("INSERT INTO users(id,name,color,created_at) VALUES(?,?,?,?)", uid, n, COLORS[Math.floor(Math.random() * COLORS.length)], now());
+    const avatar = 1 + (crypto.getRandomValues(new Uint32Array(1))[0] % AVATARS.length); // random 3D character
+    await run("INSERT INTO users(id,name,color,avatar,created_at) VALUES(?,?,?,?,?)", uid, n, COLORS[Math.floor(Math.random() * COLORS.length)], avatar, now());
     return user(uid);
+  }
+
+  async function setAvatar(u, n) {
+    if (!Number.isInteger(n) || n < 1 || n > AVATARS.length) throw new Rule("Pick one of the characters", 400);
+    await run("UPDATE users SET avatar=? WHERE id=?", n, u.id);
+    return user(u.id);
   }
 
   async function createTrip(owner, t) {
@@ -349,14 +356,14 @@ export function makeTrips(db, pp = paypal) {
     const reqs = raw.map((r) => {
       const f = people.get(r.friend_id);
       const needs_vouch = !f.kept && !r.vouched && !r.auth_id && usd(holdOf(t, r), t.currency) > NEW_FRIEND_USD; // S6, per ask
-      return { ...r, friend: { id: f.id, name: f.name, color: f.color, kept: f.kept }, hold_needed: holdOf(t, r), hold_usd: Math.round(usd(holdOf(t, r), t.currency)), needs_vouch, order_id: undefined, mineReq: r.friend_id === viewer.id };
+      return { ...r, friend: { id: f.id, name: f.name, color: f.color, avatar: f.avatar, kept: f.kept }, hold_needed: holdOf(t, r), hold_usd: Math.round(usd(holdOf(t, r), t.currency)), needs_vouch, order_id: undefined, mineReq: r.friend_id === viewer.id };
     }).filter((r) => mine || r.mineReq);
     const events = (await all("SELECT * FROM events WHERE trip_id=? ORDER BY id DESC LIMIT 40", t.id))
       .filter((e) => mine || !e.request_id || reqs.some((r) => r.id === e.request_id));
     const receipt = await one("SELECT id,shop,total,lines,matches,model,created_at FROM receipts WHERE trip_id=? ORDER BY created_at DESC LIMIT 1", t.id);
     return {
       trip: { ...t, payee_email: mine ? t.payee_email : undefined, invite: mine ? t.invite : undefined },
-      owner: { id: owner.id, name: owner.name, color: owner.color, kept: owner.kept },
+      owner: { id: owner.id, name: owner.name, color: owner.color, avatar: owner.avatar, kept: owner.kept },
       mine, requests: reqs, events, customs: await customs(t),
       receipt: receipt && mine ? { ...receipt, lines: JSON.parse(receipt.lines), matches: JSON.parse(receipt.matches) } : null,
     };
@@ -387,7 +394,7 @@ export function makeTrips(db, pp = paypal) {
     const mine = [];
     for (const t of mineT) mine.push({ ...t, sum: await summary(t) });
     const out = [];
-    for (const t of joined) { const o = await user(t.owner_id); out.push({ ...t, invite: undefined, payee_email: undefined, owner: o.name, ownerColor: o.color, sum: await summary(t, u.id) }); }
+    for (const t of joined) { const o = await user(t.owner_id); out.push({ ...t, invite: undefined, payee_email: undefined, owner: o.name, ownerColor: o.color, ownerUser: { id: o.id, name: o.name, avatar: o.avatar }, sum: await summary(t, u.id) }); }
     return { mine, joined: out };
   }
 
@@ -397,5 +404,5 @@ export function makeTrips(db, pp = paypal) {
   const receipt = (rid, tid) => one("SELECT * FROM receipts WHERE id=? AND trip_id=?", rid, tid);
   const markable = (tid) => all("SELECT * FROM requests WHERE trip_id=? AND status IN ('found','swapped')", tid);
 
-  return { canSee, finishEmpty, retry, user, trip, request, createUser, createTrip, addRequest, withdraw, decide, setShopDay, startHold, finishHold, startShopping, mark, answerSwap, planSettlement, settle, confirmDelivery, view, tripsFor, log, byInvite, saveReceipt, receipt, markable };
+  return { canSee, finishEmpty, retry, setAvatar, user, trip, request, createUser, createTrip, addRequest, withdraw, decide, setShopDay, startHold, finishHold, startShopping, mark, answerSwap, planSettlement, settle, confirmDelivery, view, tripsFor, log, byInvite, saveReceipt, receipt, markable };
 }

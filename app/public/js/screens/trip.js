@@ -127,7 +127,7 @@ function order({ app, v, cur, reload }, rid) {
     ${S.act ? `<div class="actbar">${S.act}</div>` : ""}
     <nav class="rail" aria-label="Your asks"><div class="card"><div class="me">${av(store.me, 40)}<div><b>${esc(store.me.name)}</b><span>Your asks</span></div></div>
       <h3>${esc(o.name)} · ${esc(t.city)}</h3>${reqs.map((x) => `<a class="ord" href="#/trip/${t.id}/r/${x.id}" aria-current="${x.id === r.id}">${pic(x.art, 40)}<div><b>${esc(titleOf(x))}</b><span><i class="dot" style="background:${dotOf(x, t)}"></i>${statusWord(x, t)}</span></div></a>`).join("")}
-      ${store.joined.filter((x) => x.id !== t.id).length ? `<h3 style="margin-top:14px">Other trips</h3>${store.joined.filter((x) => x.id !== t.id).map((x) => `<a class="ord" href="#/trip/${x.id}"><span class="av" style="--c:${esc(x.ownerColor)};--s:40px">${esc(x.owner[0])}</span><div><b>${esc(x.owner)} · ${esc(x.city)}</b><span>${moneyLine(x, false) || "asked"}</span></div></a>`).join("")}` : ""}
+      ${store.joined.filter((x) => x.id !== t.id).length ? `<h3 style="margin-top:14px">Other trips</h3>${store.joined.filter((x) => x.id !== t.id).map((x) => `<a class="ord" href="#/trip/${x.id}">${av(x.ownerUser || { name: x.owner }, 40)}<div><b>${esc(x.owner)} · ${esc(x.city)}</b><span>${moneyLine(x, false) || "asked"}</span></div></a>`).join("")}` : ""}
     </div></nav>
     <aside class="aside" aria-label="Money and timeline"><div class="card"><h3>Your money · PayPal</h3>${moneyHTML(cur, S.money)}</div><div class="card"><h3>Timeline</h3>${timeline}</div></aside>
   </main>`;

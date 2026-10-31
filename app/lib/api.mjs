@@ -39,6 +39,7 @@ export function makeApi(db, { saveImage } = {}) {
   on("GET", "/api/config", () => ({ places: PLACES, homes: HOMES, paypal: pp.paypalReady(), paypalTest: pp.fake(), ai: ai.aiReady(), aiModel: ai.aiName(), sandbox: true, demoSwitch: demoSwitch() }));
   on("GET", "/api/me", async (req) => { const u = await me(req); return u ? { user: u, ...(await T.tripsFor(u)) } : { user: null }; });
   on("POST", "/api/me", async (req) => { const u = await T.createUser((await body(req)).name); return json({ user: u }, 200, setSid(req, await newSession(u.id))); });
+  on("POST", "/api/me/avatar", async (req) => ({ user: await T.setAvatar(await needMe(req), (await body(req)).avatar) }));
   on("POST", "/api/switch", async (req) => {
     if (!demoSwitch()) throw new Rule("Not available", 404);
     const cur = await needMe(req); const b = await body(req);
@@ -61,7 +62,7 @@ export function makeApi(db, { saveImage } = {}) {
   on("GET", "/api/join/:code", async (_req, p) => {
     const t = await T.byInvite(p.code); if (!t) throw new Rule("This invite link is not valid", 404);
     const o = await T.user(t.owner_id);
-    return { trip: { id: t.id, city: t.city, city_code: t.city_code, home: t.home, home_code: t.home_code, currency: t.currency, depart: t.depart, ret: t.ret, fee: t.fee, status: t.status }, owner: { name: o.name, color: o.color, kept: o.kept } };
+    return { trip: { id: t.id, city: t.city, city_code: t.city_code, home: t.home, home_code: t.home_code, currency: t.currency, depart: t.depart, ret: t.ret, fee: t.fee, status: t.status }, owner: { id: o.id, name: o.name, color: o.color, avatar: o.avatar, kept: o.kept } };
   });
   on("POST", "/api/join/:code/requests", async (req, p) => {
     const t = await T.byInvite(p.code); if (!t) throw new Rule("Invalid invite", 404);
