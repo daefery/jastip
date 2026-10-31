@@ -50,6 +50,13 @@ function welcome(next) {
 const ROLE_ST = {
   open: ["Taking asks", "gray"], holds: ["Holds open", "blue"], shopping: ["Shopping", "orange"], settling: ["Payment problem", "red"], settled: ["Paid", "green"],
 };
+function ownerStatus(t) {
+  const S = t.sum;
+  if (S.pending) return ["PayPal pending", "red"];
+  if (S.waiting) return [`${S.waiting} new ask${S.waiting > 1 ? "s" : ""}`, "orange"];
+  if (t.status === "settled") return S.toConfirm ? [`Hand over ${S.toConfirm}`, "orange"] : S.charged ? ["Delivered", "green"] : ["Nothing bought", "gray"];
+  return ROLE_ST[t.status];
+}
 function friendStatus(sum, t) {
   if (sum.pending) return sum.pendingCharge ? ["Paying…", "orange"] : ["Releasing…", "orange"];
   if (sum.swaps) return ["Pick a swap", "orange"];
@@ -69,7 +76,7 @@ export function moneyLine(t, mine) {
   const S = t.sum, c = t.currency;
   const pend = S.pending ? [S.pendingCharge && `${fmt(S.pendingCharge, c)} charge pending`, S.pendingRelease && `${fmt(S.pendingRelease, c)} release pending`].filter(Boolean).join(" · ") : "";
   if (pend) return [S.charged && `${fmt(S.charged, c)} paid`, pend].filter(Boolean).join(" · ");
-  if (mine) return t.status === "settled" ? `+${fmt(S.charged, c)}` : S.heldClean ? `${fmt(S.heldClean, c)} held` : `${S.count} ask${S.count === 1 ? "" : "s"}`;
+  if (mine) return t.status === "settled" ? (S.charged ? `+${fmt(S.charged, c)}` : "nothing charged") : S.heldClean ? `${fmt(S.heldClean, c)} held` : `${S.count} ask${S.count === 1 ? "" : "s"}`;
   return S.charged ? `${fmt(S.charged, c)} paid` : S.heldClean ? `${fmt(S.heldClean, c)} held` : "";
 }
 
@@ -79,7 +86,7 @@ function home() {
     ...store.joined.map((t) => ({ t, mine: false })),
   ];
   const row = ({ t, mine }) => {
-    const [label, tone] = mine ? (t.sum.pending ? ["PayPal pending", "red"] : t.sum.waiting ? [`${t.sum.waiting} new ask${t.sum.waiting > 1 ? "s" : ""}`, "orange"] : ROLE_ST[t.status]) : friendStatus(t.sum, t);
+    const [label, tone] = mine ? ownerStatus(t) : friendStatus(t.sum, t);
     const money = moneyLine(t, mine);
     return `<a class="trip" href="#/trip/${t.id}">
       <span class="route"><small>${esc(t.home_code)}</small>${esc(t.city_code)}</span>

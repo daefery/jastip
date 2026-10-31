@@ -82,7 +82,7 @@ function friendState(r, t, owner) {
       Object.assign(S, { scene: "paid", eta: `${o} lands ${new Date(t.ret + "T00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}`, title: `Paid ${fmt(r.charged, cur)}. Exactly.`, sub: `The receipt line plus ${o}'s fee. ${fmt(hold - r.charged, cur)} of your hold was never taken.`,
         act: `<button class="btn green" data-got>${ic("box")}I got my item</button>`, money: { value: r.charged, note: `paid · ${fmt(hold - r.charged, cur)} never taken`, fill: pct, color: "var(--green)", rest: true } });
       break; }
-    case "released": Object.assign(S, { scene: "released", eta: "Settled", title: withdrawnLate ? "Ask withdrawn. Hold released." : /shopping started/.test(r.plan_why || "") ? "Approved too late. Hold released." : "Not found. Nothing paid.", sub: r.hold ? `Your ${fmt(r.hold, cur)} hold was released.` : "Nothing was held or charged.", money: { value: 0, note: r.hold ? `${fmt(r.hold, cur)} released` : "nothing held", fill: 0 } }); break;
+    case "released": Object.assign(S, { scene: "released", eta: "Settled", title: withdrawnLate ? "Ask withdrawn. Hold released." : /shopping started/.test(r.plan_why || "") ? "Approved too late. Hold released." : /receipt|line already/.test(r.plan_why || "") ? "Not on the receipt. Nothing paid." : /swap/.test(r.plan_why || "") ? "Swap not taken. Nothing paid." : "Not found. Nothing paid.", sub: r.hold ? `Your ${fmt(r.hold, cur)} hold was released.` : "Nothing was held or charged.", money: { value: 0, note: r.hold ? `${fmt(r.hold, cur)} released` : "nothing held", fill: 0 } }); break;
     case "delivered": {
       const pct = Math.round((r.charged / hold) * 100);
       Object.assign(S, { scene: "delivered", eta: `Delivered ${r.delivered_at ? when(r.delivered_at) : ""}`, title: "Delivered. Enjoy!", sub: `Thanks for using Jastip with ${o}.`, money: { value: r.charged, note: `paid · ${fmt(hold - r.charged, cur)} never taken`, fill: pct, color: "var(--green)", rest: true } });
@@ -242,10 +242,20 @@ function courier({ app, v, cur, reload }, openShare) {
     action = nothing ? `<button class="btn dark" data-finish>${ic("check")}Finish trip · release ${fmt(holdSum(nf), cur)}</button>`
       : `<button class="btn dark" data-receipt ${found.length && !swaps.length ? "" : "disabled"}>${ic("camera")}Pay &amp; scan receipt</button>`;
   } else {
-    n = paid.length && paid.every((r) => r.status === "delivered") ? 5 : 3; scene = n === 5 ? "delivered" : "paid"; eta = "Settled";
-    title = `${fmt(paid.reduce((s, r) => s + r.charged, 0), cur)} paid to you`;
-    sub = "Exact receipt lines + your fee. Holds not used were released.";
-    action = paid.some((r) => r.status === "settled") ? `<button class="btn dark" data-qr>${ic("qr")}Show handover code</button>` : "";
+    const toHand = paid.filter((r) => r.status === "settled");
+    n = paid.length && !toHand.length ? 5 : 3; eta = "Settled";
+    if (!paid.length) {
+      scene = "released"; title = "Nothing bought on this trip";
+      sub = `No one was charged. ${fmt(rel.reduce((s, r) => s + (r.hold || 0), 0), cur)} of holds went back to your friends. Nothing to hand over.`;
+      action = `<a class="btn dark" href="#/new">${ic("plane")}Plan another trip</a>`;
+    } else if (toHand.length) {
+      scene = "paid"; title = `${fmt(paid.reduce((s, r) => s + r.charged, 0), cur)} paid to you`;
+      sub = `Next: hand over ${toHand.length} item${toHand.length > 1 ? "s" : ""}. Each friend taps “I got my item”, or scans your code.`;
+      action = `<button class="btn dark" data-qr>${ic("qr")}Show handover code</button>`;
+    } else {
+      scene = "delivered"; title = "All delivered";
+      sub = `${fmt(paid.reduce((s, r) => s + r.charged, 0), cur)} paid to you. Every friend confirmed the handover.`;
+    }
   }
   // Recovery sits next to the normal next step, never in place of it: a release PayPal hasn't confirmed
   // for one friend must not block buying another friend's item.

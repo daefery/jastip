@@ -10,8 +10,8 @@ export function receiptFlow(v, done) {
       <button class="btn dark" id="rx-take" data-primary>${ic("camera")}Take or choose photo</button>
       <input id="rx-file" type="file" accept="image/*" capture="environment" hidden>
       <div style="height:8px"></div>
-      <button class="btn light" id="rx-sample">${ic("receipt")}Use sample receipt</button>
-      <p class="hint" style="text-align:center">The sample is a Don Quijote receipt for testing.</p></div>` });
+      ${t.currency === "JPY" ? `<button class="btn light" id="rx-sample">${ic("receipt")}Use sample receipt</button>
+      <p class="hint" style="text-align:center">The sample is a Don Quijote (Tokyo) receipt for testing.</p>` : ""}</div>` });
   const box = s.el.querySelector("#rx");
 
   const read = async (dataUrl) => {
@@ -32,14 +32,20 @@ export function receiptFlow(v, done) {
     const owned = new Map(r.plan.filter((p) => p.line).map((p) => [p.line.n, byId.get(p.id)?.friend]));
     const total = r.plan.reduce((a, p) => a + p.charge, 0);
     const nC = r.plan.filter((p) => p.charge).length, nR = r.plan.filter((p) => !p.charge).length;
+    // items the traveller marked Found (or a swap) that the receipt doesn't show
+    const missing = r.plan.filter((p) => !p.charge && ["found", "swapped"].includes(byId.get(p.id)?.status));
     s.el.querySelector(".sh-h h2").textContent = `Read in ${secs} s`;
     box.innerHTML = `
       <div class="receipt"><div class="shop">${esc(r.shop || "Receipt")}</div><hr>
         ${r.lines.map((l) => { const f = owned.get(l.n); return `<div class="l"><span>${f ? av(f, 20) : ""}</span><span>${esc(l.text)}${l.disc ? " (disc.)" : ""}</span><span>${fmt(l.price, cur)}</span></div>`; }).join("")}</div>
       <div class="split" style="margin-top:12px">${r.plan.map((p) => { const q = byId.get(p.id); return `<div class="sr${p.charge ? "" : " x"}">${av(q.friend, 28)}<div class="t">${esc(q.friend.name)} · ${esc(p.title)}<small>${p.line ? `${fmt(p.line.price, cur)} + ${fmt(t.fee, cur)} fee${p.over ? " · capped at max" : ""}` : esc(p.why)}</small></div>
         <b class="num">${p.charge ? fmt(p.charge, cur) : `${fmt(p.hold || 0, cur)} released`}${p.charge ? `<small>of ${fmt(p.hold, cur)}</small>` : ""}</b></div>`; }).join("")}</div>
-      <p class="hint" style="margin:10px 4px 14px">Wrong match? Cancel and retake. Nothing moves until you tap below.</p>
-      <button class="btn dark" id="rx-go">${ic("lock")}Charge ${nC}${nR ? ` · release ${nR}` : ""} · ${fmt(total, cur)}</button>`;
+      ${missing.length ? `<div class="warn">${ic("receipt")}<div><b>${missing.length === 1 ? `${esc(missing[0].title)} isn't` : `${missing.length} items you found aren't`} on this receipt</b>
+        <span>If you bought ${missing.length === 1 ? "it" : "them"}, retake the photo. Releasing means ${missing.map((p) => esc(p.friend)).join(", ")} ${missing.length === 1 ? "pays" : "pay"} nothing and you can't charge for ${missing.length === 1 ? "it" : "them"} later.</span></div></div>` : ""}
+      <p class="hint" style="margin:10px 4px 14px">Nothing moves until you tap below.</p>
+      ${missing.length ? `<button class="btn dark" id="rx-again2">${ic("camera")}Retake photo</button><div style="height:8px"></div>` : ""}
+      <button class="btn ${missing.length ? "light" : "dark"}" id="rx-go">${ic("lock")}${nC ? `Charge ${nC}${nR ? ` · release ${nR}` : ""} · ${fmt(total, cur)}` : `Release ${nR === 1 ? "the hold" : `all ${nR} holds`} · charge nothing`}</button>`;
+    box.querySelector("#rx-again2")?.addEventListener("click", () => { s.close(); setTimeout(() => receiptFlow(v, done), 300); });
     box.querySelector("#rx-go").onclick = async (e) => {
       busy(e.currentTarget, true, "Talking to PayPal");
       try {
@@ -57,7 +63,8 @@ export function receiptFlow(v, done) {
 
   box.querySelector("#rx-take").onclick = () => box.querySelector("#rx-file").click();
   box.querySelector("#rx-file").onchange = async (e) => { const f = e.target.files[0]; if (f) read(await fileToDataUrl(f)); };
-  box.querySelector("#rx-sample").onclick = async () => {
+  const sample = box.querySelector("#rx-sample");
+  if (sample) sample.onclick = async () => {
     const blob = await (await fetch("/sample/receipt.png")).blob();
     read(await new Promise((ok) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.readAsDataURL(blob); }));
   };

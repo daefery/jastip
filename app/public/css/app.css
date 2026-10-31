@@ -372,3 +372,9 @@ input[type=date].input{padding:0 10px;font-size:16px}
 .sheet.ask .sh-h{justify-content:flex-start}
 .sheet.ask .sh-h>span:first-child{display:none}
 .sheet.ask .sh-h h2{font-size:22px}
+.warn{display:flex;gap:10px;align-items:flex-start;background:#fff4e5;color:#7a4b00;border-radius:14px;padding:12px 14px;margin-top:12px;font-size:14px;line-height:1.4}
+.warn svg{flex:none;width:20px;height:20px;margin-top:1px}
+.warn b{display:block;color:#5c3800;font-size:15px;margin-bottom:2px}
+/* KPI amounts shrink with their box instead of being cut off (S$1,626.00 in a phone third) */
+.kpis .kpi{container-type:inline-size}
+.kpis .kpi b{font-size:clamp(13px,15cqi,19px);text-overflow:clip}

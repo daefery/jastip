@@ -220,6 +220,25 @@ for (const vp of [{ width: 320, height: 640 }, { width: 768, height: 1024 }, { w
   ok(hk.status === 409 && /confirm they know you/.test(hk.error), "without vouching the big hold is still refused", hk.error);
 }
 
+// Receipt doesn't show a Found item: warn, Retake is the main button, release is secondary
+{
+  const d7 = await person("Dina7", { width: 390, height: 844 }), h7 = await person("Hana");
+  const t7 = (await d7.call("/api/trips", { home_code: "CGK", city_code: "SIN", depart: d(1), ret: d(5), fee: 2 })).trip;
+  const inv7 = (await d7.call(`/api/trips/${t7.id}`)).trip.invite;
+  const r7 = (await h7.call(`/api/join/${inv7}/requests`, { title: "iPhone", cap: 30 })).request;
+  await d7.call(`/api/requests/${r7.id}/decide`, { accept: true }); await d7.call(`/api/trips/${t7.id}/day`, { day: "Mon" });
+  await approve(h7, r7.id); await d7.call(`/api/trips/${t7.id}/shop`, {}); await d7.call(`/api/requests/${r7.id}/mark`, { what: "found" });
+  await d7.p.goto(`/#/trip/${t7.id}`); await d7.p.reload(); await d7.p.waitForSelector("[data-receipt]:not([disabled])");
+  await d7.p.route("**/api/trips/*/receipt", (route) => route.fulfill({ json: { receipt: "X", rev: 0, shop: "Shop", lines: [{ n: 1, text: "KITKAT", price: 118800 }],
+    plan: [{ id: r7.id, charge: 0, line: null, why: "not on receipt", hold: 3200, title: "iPhone", friend: "Hana" }] } }));
+  await d7.p.locator("[data-receipt]").first().click(); await d7.p.waitForSelector(".sheet");
+  ok(await d7.p.locator("#rx-sample").count() === 0, "SGD trip: no Japanese sample receipt offered");
+  await d7.p.setInputFiles("#rx-file", "public/sample/receipt.png"); await d7.p.waitForSelector("#rx-go");
+  const sh = await d7.p.locator(".sheet").innerText();
+  ok(/iPhone isn't on this receipt/.test(sh) && await d7.p.locator("#rx-again2").count() === 1 && /charge nothing/.test(await d7.p.locator("#rx-go").innerText()), "Found item missing from receipt: warning + Retake first, release is explicit");
+  await d7.p.unroute("**/api/trips/*/receipt");
+}
+
 // 3. a stranger cannot open the trip
 const zed = await person("Zed");
 ok((await zed.call(`/api/trips/${trip.id}`)).status === 404, "stranger gets 404 on the trip");
