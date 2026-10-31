@@ -1,5 +1,5 @@
 {
- "note": "Reading of receipt.png (synthetic Don Quijote Shibuya receipt made for the demo), checked by hand. Stored so the sample needs no image AI call; asks are still matched to these lines by AI.",
+ "note": "Reading of receipt.png (synthetic Don Quijote Shibuya receipt made for the demo), checked by hand. Stored so the sample needs no image AI call. Asks are matched to these lines by AI; if the AI is unavailable, by the keys below (plain word match).",
  "shop": "ドン・キホーテ 渋谷本店",
  "currency": "JPY",
  "total": 2959,
@@ -7,27 +7,51 @@
   {
    "n": 1,
    "text": "KITKAT ｵﾄﾅﾉｱﾏｻ 抹茶 大袋",
-   "price": 1188
+   "price": 1188,
+   "keys": [
+    "kitkat",
+    "kit kat",
+    "matcha",
+    "抹茶"
+   ]
   },
   {
    "n": 2,
    "text": "東京ﾊﾞﾅﾅ ﾐｴﾀｯﾀ 4個入",
-   "price": 648
+   "price": 648,
+   "keys": [
+    "tokyo banana",
+    "東京ばな奈",
+    "banana"
+   ]
   },
   {
    "n": 3,
    "text": "ﾊﾀﾞﾗﾎﾞ 極潤 ﾋｱﾙﾛﾝ液 170ml",
-   "price": 968
+   "price": 968,
+   "keys": [
+    "hada labo",
+    "hadalabo",
+    "gokujyun",
+    "gokujun",
+    "hyaluronic"
+   ]
   },
   {
    "n": 4,
    "text": "ｼﾞｬｶﾞﾘｺ ｻﾗﾀﾞ",
-   "price": 150
+   "price": 150,
+   "keys": [
+    "jagarico",
+    "jaga rico",
+    "じゃがりこ"
+   ]
   },
   {
    "n": 5,
    "text": "ﾚｼﾞ袋 L",
-   "price": 5
+   "price": 5,
+   "keys": []
   }
  ]
 }

@@ -88,7 +88,20 @@ export function makeApi(db, { saveImage } = {}) {
   const SAMPLES = globalThis.__JASTIP_SAMPLES__ || {};
   const sampleReading = async (image, reqs) => {
     const s = SAMPLES[await sha(image)]; if (!s) return null;
-    const { matches, model } = await ai.matchLines(s.lines, reqs);
+    let matches, model;
+    try { ({ matches, model } = await ai.matchLines(s.lines, reqs)); }
+    catch {
+      // AI unavailable (e.g. the free daily allowance is used up): match by the stored keywords instead,
+      // so judges can always finish the flow with the sample receipt. Each line answers at most one ask.
+      const used = new Set();
+      matches = reqs.map((r) => {
+        const want = String(r.swap_title || r.title).toLowerCase();
+        const line = s.lines.find((l) => !used.has(l.n) && (l.keys || []).some((k) => want.includes(k)));
+        if (line) used.add(line.n);
+        return { request_id: r.id, line_n: line ? line.n : null, confidence: line ? 0.9 : 0 };
+      });
+      model = "keyword match";
+    }
     return { shop: s.shop, currency: s.currency, total: s.total, lines: s.lines.map(({ n, text, price }) => ({ n, text, price })), matches, model: `${model} (sample lines stored)` };
   };
   const plainItem = (text) => ({ title: String(text).replace(/https?:\/\/\S+/g, "").trim().slice(0, 40) || "Item", detail: "", typical: 0, art: "other", ai: false });
@@ -132,7 +145,7 @@ export function makeApi(db, { saveImage } = {}) {
     let read = await cached(key);
     if (!read) {
       if (!(await spend(u, "receipt"))) throw new Rule("That's a lot of receipt scans this hour. Wait a bit and try again; your holds stay in place.", 429);
-      try { read = isSample ? await sampleReading(b.image, reqs) : await ai.readReceipt(b.image, reqs); await remember(key, "receipt", read); }
+      try { read = isSample ? await sampleReading(b.image, reqs) : await ai.readReceipt(b.image, reqs); if (!/keyword match/.test(read.model)) await remember(key, "receipt", read); }
       catch (e) {
         await T.log(t.id, null, "ai", "Receipt read failed", e.message.slice(0, 280), 0);
         if (e instanceof ai.AiBusy) throw new Rule("The receipt reader is resting until 07:00 WIB (its free daily limit). Try the sample receipt, or come back later; your holds stay in place.", 503);

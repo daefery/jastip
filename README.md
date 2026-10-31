@@ -28,7 +28,8 @@ Jastip fixes the money part with PayPal:
 1. Window 1, the traveller: open the live demo, enter a name, tap **New trip**, pick **Tokyo**,
    then **Share trip link** → copy.
 2. Window 2, a friend (a private/incognito window, or another browser): open the link, enter a
-   name, type `matcha kitkat`, tap **Find**, keep the max price, tap **Ask**.
+   name, type `matcha kitkat`, tap **Find**, set the max price to **¥1,500** with **+** (the sample
+   receipt's KitKat is ¥1,188; a lower max shows the charge being capped at the max), tap **Ask**.
 3. Traveller: **Accept**, then **Pick shopping day**.
 4. Friend: **Hold with PayPal** → log in with the sandbox buyer below → approve.
    Back in the app: "Hold approved. ¥0 charged."
