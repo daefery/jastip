@@ -126,7 +126,7 @@ plain JavaScript (no framework, no runtime dependencies) · `qrcode-generator` (
 - **OpenAI image generation** (through the Codex CLI): all illustrations, avatars, the app icon
   and the hero image in `app/public/img/` (see [`app/public/img/README.md`](app/public/img/README.md)).
 - **AI coding agents** (Claude via the pi coding agent; GPT via pi for independent code and UX
-  review rounds, saved in `council/`): used to write and review code, tests and docs. The product
+  review rounds): used to write and review code, tests and docs. The product
   idea, the PayPal flow, the safety rules and every design decision were made and checked by the author.
 
 ## Repository
@@ -134,10 +134,8 @@ plain JavaScript (no framework, no runtime dependencies) · `qrcode-generator` (
 | Path | What |
 |---|---|
 | `app/` | The app: `lib/` (API, rules, PayPal, AI, DB), `public/` (UI), `test/`, `migrations/` |
-| `spikes/` | The two risk spikes run before building (PayPal holds in JPY, receipt matching) |
+| `spikes/` | The two risk tests run before building (PayPal holds in JPY, receipt matching across eight models) |
 | `receipts/` | Synthetic test receipts and their generator |
-| `design/`, `proto/` | Design research and clickable prototypes explored before the app |
-| `council/` | Independent review rounds of the app (findings and fixes) |
 
 ## License
 

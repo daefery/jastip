@@ -16,3 +16,13 @@ design/e/shots-adaptive/
 design/e/sheet-adaptive.*
 app/.wrangler/
 video/out/
+
+# Kept locally, not part of the public submission repo
+design/
+proto/
+council/
+submission/
+video/
+app/test/shots.mjs
+app/test/shots-late.mjs
+app/test/live-receipt.mjs
