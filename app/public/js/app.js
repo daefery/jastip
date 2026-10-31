@@ -51,7 +51,7 @@ const ROLE_ST = {
   open: ["Taking asks", "gray"], holds: ["Holds open", "blue"], shopping: ["Shopping", "orange"], settling: ["Payment problem", "red"], settled: ["Paid", "green"],
 };
 function friendStatus(sum, t) {
-  if (sum.pending) return ["Paying…", "orange"];
+  if (sum.pending) return sum.pendingCharge ? ["Paying…", "orange"] : ["Releasing…", "orange"];
   if (sum.swaps) return ["Pick a swap", "orange"];
   if (sum.toHold && t.status === "holds") return ["Approve hold", "orange"];
   if (sum.toConfirm) return ["Got it?", "orange"];
@@ -62,15 +62,24 @@ function friendStatus(sum, t) {
   return ["Asked", "gray"];
 }
 
+// One line of money for a trip card. Unconfirmed PayPal steps are named for what they are
+// ("¥900 charge pending"), never shown as a definite hold.
+export function moneyLine(t, mine) {
+  const S = t.sum, c = t.currency;
+  const pend = S.pending ? [S.pendingCharge && `${fmt(S.pendingCharge, c)} charge pending`, S.pendingRelease && `${fmt(S.pendingRelease, c)} release pending`].filter(Boolean).join(" · ") : "";
+  if (pend) return [S.charged && `${fmt(S.charged, c)} paid`, pend].filter(Boolean).join(" · ");
+  if (mine) return t.status === "settled" ? `+${fmt(S.charged, c)}` : S.heldClean ? `${fmt(S.heldClean, c)} held` : `${S.count} ask${S.count === 1 ? "" : "s"}`;
+  return S.charged ? `${fmt(S.charged, c)} paid` : S.heldClean ? `${fmt(S.heldClean, c)} held` : "";
+}
+
 function home() {
   const trips = [
     ...store.mine.map((t) => ({ t, mine: true })),
     ...store.joined.map((t) => ({ t, mine: false })),
   ];
   const row = ({ t, mine }) => {
-    const [label, tone] = mine ? (t.sum.waiting ? [`${t.sum.waiting} new ask${t.sum.waiting > 1 ? "s" : ""}`, "orange"] : ROLE_ST[t.status]) : friendStatus(t.sum, t);
-    const money = mine ? (t.status === "settled" ? `+${fmt(t.sum.charged, t.currency)}` : t.status === "settling" ? `${fmt(t.sum.held, t.currency)} awaiting PayPal` : t.sum.held ? `${fmt(t.sum.held, t.currency)} held` : `${t.sum.count} ask${t.sum.count === 1 ? "" : "s"}`)
-      : t.sum.charged ? `${fmt(t.sum.charged, t.currency)} paid` : t.sum.held ? `${fmt(t.sum.held, t.currency)} held` : "";
+    const [label, tone] = mine ? (t.sum.pending ? ["PayPal pending", "red"] : t.sum.waiting ? [`${t.sum.waiting} new ask${t.sum.waiting > 1 ? "s" : ""}`, "orange"] : ROLE_ST[t.status]) : friendStatus(t.sum, t);
+    const money = moneyLine(t, mine);
     return `<a class="trip" href="#/trip/${t.id}">
       <span class="route"><small>${esc(t.home_code)}</small>${esc(t.city_code)}</span>
       <div style="min-width:0"><b>${mine ? `Your trip · ${esc(t.city)}` : `${esc(t.owner)} · ${esc(t.city)}`}</b><div class="sub">${dr(t)}${mine ? "" : ` · you asked ${t.sum.count}`}</div></div>

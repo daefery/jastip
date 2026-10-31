@@ -1,7 +1,7 @@
 // The tracker. Friend = an order (Uber Eats). Traveller = courier mode (Instacart Shopper).
 // Every number is from the server; every money move goes through the API (PayPal on the server).
 import { api, ic, esc, av, toast, busy, sheet, pic, qrSvg, dateRange, when } from "../ui.js";
-import { topbar, store, owns } from "../app.js";
+import { topbar, store, owns, moneyLine } from "../app.js";
 import { sceneHTML, skyOf } from "../scenes.js";
 import { fmt, OUTSTANDING } from "../money.js";
 import { receiptFlow } from "./receipt.js";
@@ -51,8 +51,9 @@ function friendState(r, t, owner) {
   if (unconfirmed && r.plan_op === "capture") return Object.assign(S, { scene: "paid", eta: "Paying", title: `Charging ${fmt(r.plan_charge, cur)}`,
     sub: `The receipt line plus ${o}'s fee. PayPal hasn't confirmed the charge yet; ${o} can retry it from the trip. It can never go above your ${fmt(hold, cur)} hold.`,
     money: { value: r.plan_charge, note: `charge awaiting PayPal · the rest of your hold is not taken`, fill: Math.round((r.plan_charge / hold) * 100), color: "#9be2bd", rest: true } });
-  if (unconfirmed) return Object.assign(S, { scene: "released", eta: "Releasing", title: r.status === "releasing" ? "Approved too late" : "Not bought. Releasing your hold.",
-    sub: `${r.status === "releasing" ? `${o} had already started shopping. ` : ""}Nothing will be charged. PayPal hasn't confirmed the release yet; ${o} can retry it from the trip.`,
+  const withdrawnLate = /withdrawn/.test(r.plan_why || "");
+  if (unconfirmed) return Object.assign(S, { scene: "released", eta: "Releasing", title: withdrawnLate ? "Ask withdrawn. Releasing your hold." : r.status === "releasing" ? "Approved too late" : "Not bought. Releasing your hold.",
+    sub: `${r.status === "releasing" && !withdrawnLate ? `${o} had already started shopping. ` : ""}Nothing will be charged. PayPal hasn't confirmed the release yet; ${o} can retry it from the trip.`,
     money: { value: 0, note: `release of ${fmt(hold, cur)} awaiting PayPal`, fill: 100, color: "#c7c7cc" } });
   switch (r.status) {
     case "asked": Object.assign(S, { title: `Waiting for ${o}`, sub: `${o} checks your max price before anyone holds money.`, act: `<button class="btn red" data-withdraw>${ic("trash")}Withdraw ask</button>` }); break;
@@ -125,7 +126,7 @@ function order({ app, v, cur, reload }, rid) {
     ${S.act ? `<div class="actbar">${S.act}</div>` : ""}
     <nav class="rail" aria-label="Your asks"><div class="card"><div class="me">${av(store.me, 40)}<div><b>${esc(store.me.name)}</b><span>Your asks</span></div></div>
       <h3>${esc(o.name)} · ${esc(t.city)}</h3>${reqs.map((x) => `<a class="ord" href="#/trip/${t.id}/r/${x.id}" aria-current="${x.id === r.id}">${pic(x.art, 40)}<div><b>${esc(titleOf(x))}</b><span><i class="dot" style="background:${dotOf(x, t)}"></i>${statusWord(x, t)}</span></div></a>`).join("")}
-      ${store.joined.filter((x) => x.id !== t.id).length ? `<h3 style="margin-top:14px">Other trips</h3>${store.joined.filter((x) => x.id !== t.id).map((x) => `<a class="ord" href="#/trip/${x.id}"><span class="av" style="--c:${esc(x.ownerColor)};--s:40px">${esc(x.owner[0])}</span><div><b>${esc(x.owner)} · ${esc(x.city)}</b><span>${x.sum.charged ? fmt(x.sum.charged, x.currency) + " paid" : x.sum.held ? fmt(x.sum.held, x.currency) + " held" : "asked"}</span></div></a>`).join("")}` : ""}
+      ${store.joined.filter((x) => x.id !== t.id).length ? `<h3 style="margin-top:14px">Other trips</h3>${store.joined.filter((x) => x.id !== t.id).map((x) => `<a class="ord" href="#/trip/${x.id}"><span class="av" style="--c:${esc(x.ownerColor)};--s:40px">${esc(x.owner[0])}</span><div><b>${esc(x.owner)} · ${esc(x.city)}</b><span>${moneyLine(x, false) || "asked"}</span></div></a>`).join("")}` : ""}
     </div></nav>
     <aside class="aside" aria-label="Money and timeline"><div class="card"><h3>Your money · PayPal</h3>${moneyHTML(cur, S.money)}</div><div class="card"><h3>Timeline</h3>${timeline}</div></aside>
   </main>`;
@@ -214,6 +215,9 @@ function courier({ app, v, cur, reload }, openShare) {
   const asked = by("asked"), acc = by("accepted"), held = by("held"), live = by("held", "found", "swap_asked", "swapped", "not_found");
   const nf = by("not_found");
   const paid = by("settled", "delivered"), rel = by("released");
+  // Saved PayPal steps not confirmed yet, in any phase (a late approval can need releasing while holds are
+  // still being collected). These always come first, with a Retry action.
+  const pending = rs.filter((r) => r.plan_op && OUTSTANDING.includes(r.status));
   let scene = "open", eta = dateRange(t), title = "", sub = "", n = 0, body = "", action = "";
 
   if (t.status === "open") {
@@ -223,15 +227,11 @@ function courier({ app, v, cur, reload }, openShare) {
     else { scene = "asked"; title = `${acc.length} ask${acc.length > 1 ? "s" : ""} accepted`; sub = "Pick your shopping day. Friends then approve PayPal holds."; action = `<button class="btn dark" data-day>${ic("cal")}Pick shopping day</button>`; }
   } else if (t.status === "holds") {
     n = 1; scene = "held"; eta = `Shopping ${esc(t.shop_day)}`;
-    title = asked.length ? `${asked.length} new ask${asked.length > 1 ? "s" : ""} to check` : held.length && !acc.length ? `${held.length} holds in. Go shopping!` : `${held.length} of ${held.length + acc.length} holding`;
+    title = asked.length ? `${asked.length} new ask${asked.length > 1 ? "s" : ""} to check` : held.length && !acc.length ? `${held.length} holds in. Go shopping!` : acc.length ? `${held.length} of ${held.length + acc.length} holding` : "No holds yet";
     sub = `${fmt(holdSum(held), cur)} held for you by PayPal. ${fmt(0, cur)} charged. Only held asks go on your list.`;
     action = `<button class="btn dark" data-shop ${held.length ? "" : "disabled"}>${ic("bag")}Start shopping${held.length ? ` · ${held.length}` : ""}</button>`;
   } else if (t.status === "settling") {
     n = 3; scene = "paid"; eta = "Payment problem";
-    const stuck = rs.filter((r) => r.plan_op && OUTSTANDING.includes(r.status));
-    title = `${stuck.length} PayPal step${stuck.length === 1 ? "" : "s"} not confirmed`;
-    sub = "PayPal hasn't confirmed these yet. Retry: each one repeats the same step with the same amount, and PayPal never runs it twice.";
-    action = `<button class="btn dark" data-retry>${ic("lock")}Retry failed payments</button>`;
   } else if (t.status === "shopping") {
     n = 2; scene = "shopping"; eta = "Shopping now";
     const swaps = by("swap_asked"), found = by("found", "swapped"), looking = by("held"), nf = by("not_found");
@@ -246,7 +246,14 @@ function courier({ app, v, cur, reload }, openShare) {
     sub = "Exact receipt lines + your fee. Holds not used were released.";
     action = paid.some((r) => r.status === "settled") ? `<button class="btn dark" data-qr>${ic("qr")}Show handover code</button>` : "";
   }
+  if (pending.length || t.status === "settling") {
+    eta = "PayPal pending";
+    title = `${pending.length} PayPal step${pending.length === 1 ? "" : "s"} not confirmed`;
+    sub = "PayPal hasn't confirmed these yet. Retry: each one repeats the same step with the same amount, and PayPal never runs it twice.";
+    action = `<button class="btn dark" data-retry>${ic("lock")}Retry PayPal</button>`;
+  }
 
+  const pendingRow = (r) => `<span class="rt num" style="color:var(--orange)">${r.plan_op === "capture" ? fmt(r.plan_charge, cur) : fmt(0, cur)}<small>${r.plan_op === "capture" ? "charge awaiting PayPal" : `release of ${fmt(r.hold, cur)} awaiting PayPal`}</small></span>`;
   const row = (r, right) => `<div class="jr">${pic(r.art, 48)}<div style="min-width:0"><b class="wrap2">${esc(titleOf(r))}</b><div class="s">${av(r.friend, 18)}<em>${esc(r.friend.name)}</em></div><div class="s2">${[`<strong class="num">max ${fmt(r.cap, cur)}</strong>`, r.detail && esc(r.detail), r.rule === "similar" && "similar ok", r.rule === "skip" && "skip if sold out"].filter(Boolean).join(" · ")}</div></div>${right}</div>`;
   const group = (label, xs, right) => (xs.length ? `<div class="group">${label}<span>${xs.length}</span></div>${xs.map((r) => row(r, right(r))).join("")}` : "");
   if (t.status === "open") {
@@ -261,21 +268,22 @@ function courier({ app, v, cur, reload }, openShare) {
       + group("Still looking", by("held"), (r) => `<div class="tbtn-row"><button class="tbtn" data-more="${r.id}" aria-label="More for ${esc(r.title)}">${ic("more")}</button><button class="tbtn blue" data-mark="${r.id}" data-w="found" aria-label="Found ${esc(r.title)}">${ic("check")}<span class="lbl">Found</span></button></div>`)
       + group("Not here", by("not_found"), (r) => `<button class="tbtn x" data-mark="${r.id}" data-w="held">Undo</button>`);
   } else if (t.status === "settling") {
-    body = group("Not confirmed yet", rs.filter((r) => r.plan_op && OUTSTANDING.includes(r.status)), (r) => `<span class="rt num" style="color:var(--orange)">${r.plan_op === "capture" ? fmt(r.plan_charge, cur) : fmt(0, cur)}<small>${r.plan_op === "capture" ? "charge awaiting PayPal" : `release of ${fmt(r.hold, cur)} awaiting PayPal`}</small></span>`)
+    body = group("Not confirmed yet", pending, (r) => pendingRow(r))
       + group("Done", [...paid, ...rel], (r) => `<span class="rt num" style="color:${r.charged ? "var(--green)" : "var(--l2)"}">${fmt(r.charged || 0, cur)}<small>${r.charged ? "charged" : "released"}</small></span>`);
   } else {
     body = group("Paid", paid, (r) => `<span class="rt num" style="color:var(--green)">${fmt(r.charged, cur)}<small>${r.status === "delivered" ? "delivered" : "to hand over"}</small></span>`)
       + group("Released", rel, (r) => `<span class="rt num" style="color:var(--l2)">${fmt(0, cur)}<small>${fmt(r.hold || 0, cur)} released</small></span>`)
       + group("Not included", by("dropped"), () => `<span class="rt num" style="color:var(--l2)">${fmt(0, cur)}<small>never held</small></span>`);
   }
+  if (pending.length && t.status !== "settling") body = group("PayPal not confirmed", pending, pendingRow) + body;
   if (!rs.length) body = `<div class="empty"><b>No asks yet</b><span>Send the link to your group chat.</span></div>`;
 
   const earned = paid.reduce((s, r) => s + r.charged, 0);
-  const kpis = t.status === "settled"
+  const kpis = t.status === "settled" && !pending.length
     ? `<div class="kpis"><div class="kpi g"><b class="num">${fmt(earned, cur)}</b><span>paid to you</span></div><div class="kpi"><b class="num">${fmt(paid.length * t.fee, cur)}</b><span>your fees</span></div><div class="kpi"><b class="num">${fmt(rel.reduce((s, r) => s + (r.hold || 0), 0), cur)}</b><span>released</span></div></div>`
-    : t.status === "settling"
-    ? `<div class="kpis"><div class="kpi g"><b class="num">${fmt(earned, cur)}</b><span>confirmed paid</span></div><div class="kpi"><b class="num">${fmt(holdSum(rs.filter((r) => r.plan_op && OUTSTANDING.includes(r.status))), cur)}</b><span>authorized, not settled</span></div><div class="kpi"><b class="num">${fmt(rel.reduce((s, r) => s + (r.hold || 0), 0), cur)}</b><span>released</span></div></div>`
-    : `<div class="kpis"><div class="kpi b"><b class="num">${fmt(holdSum(rs.filter((r) => OUTSTANDING.includes(r.status) && r.auth_id !== null)), cur)}</b><span>held for you</span></div><div class="kpi"><b>${rs.filter((r) => r.status !== "declined").length}</b><span>asks</span></div><div class="kpi"><b>${new Set(rs.map((r) => r.friend.id)).size}</b><span>friends</span></div></div>`;
+    : t.status === "settling" || t.status === "settled"
+    ? `<div class="kpis"><div class="kpi g"><b class="num">${fmt(earned, cur)}</b><span>confirmed paid</span></div><div class="kpi"><b class="num">${fmt(holdSum(pending), cur)}</b><span>authorized, not settled</span></div><div class="kpi"><b class="num">${fmt(rel.reduce((s, r) => s + (r.hold || 0), 0), cur)}</b><span>released</span></div></div>`
+    : `<div class="kpis"><div class="kpi b"><b class="num">${fmt(holdSum(rs.filter((r) => OUTSTANDING.includes(r.status) && r.auth_id !== null && !r.plan_op)), cur)}</b><span>held for you</span></div><div class="kpi"><b>${rs.filter((r) => r.status !== "declined").length}</b><span>asks</span></div><div class="kpi"><b>${new Set(rs.map((r) => r.friend.id)).size}</b><span>friends</span></div></div>`;
   const activity = tl(activityRows(v.events));
   const friends = [...new Map(rs.map((r) => [r.friend.id, r.friend])).values()];
 

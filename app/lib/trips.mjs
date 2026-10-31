@@ -256,10 +256,13 @@ export function makeTrips(db, pp = paypal) {
 
   async function retry(t, owner) {
     if (!isOwner(t, owner)) throw new Rule("Only the traveller", 403);
+    // Retry is driven by open saved steps, not by the trip phase: a late approval can need releasing
+    // while the trip is still collecting holds, shopping, or (after a race) marked settled.
     const openSteps = await one(`SELECT COUNT(*) AS n FROM requests WHERE trip_id=? AND status IN ${OPEN} AND plan_op IS NOT NULL`, t.id);
-    if (t.status === "settled" && openSteps.n) await run("UPDATE trips SET status='settling' WHERE id=? AND status='settled'", t.id);
-    else if (t.status !== "settling") throw new Rule("Nothing to retry");
-    const unplanned = await all(`SELECT id FROM requests WHERE trip_id=? AND status IN ${OPEN} AND auth_id IS NOT NULL AND plan_op IS NULL`, t.id);
+    if (!openSteps.n && t.status !== "settling") throw new Rule("Nothing to retry");
+    if (t.status === "settled") await run("UPDATE trips SET status='settling' WHERE id=? AND status='settled'", t.id);
+    const phase = (await trip(t.id)).status;
+    const unplanned = phase === "settling" ? await all(`SELECT id FROM requests WHERE trip_id=? AND status IN ${OPEN} AND auth_id IS NOT NULL AND plan_op IS NULL`, t.id) : [];
     if (unplanned.length) throw new Rule(`${unplanned.length} item(s) have no saved payment step. Check them in PayPal before retrying.`);
     return runPlan(t);
   }
@@ -287,10 +290,16 @@ export function makeTrips(db, pp = paypal) {
         out.push({ id: r.id, error: e.message, op: r.plan_op });
       }
     }
-    if ((await trip(t.id)).status !== "settling") return out;
-    const left = await one(`SELECT COUNT(*) AS n FROM requests WHERE trip_id=? AND status IN ${OPEN}`, t.id);
-    if (!left.n) { const s2 = await run("UPDATE trips SET status='settled' WHERE id=? AND status='settling'", t.id); if (s2.changes) await log(t.id, null, "trip", "Trip settled", ""); }
+    await completeIfDone(t.id);
     return out;
+  }
+
+  // settling -> settled only if no request is still outstanding, checked inside the same statement
+  // (a separate count could go stale while a late approval saves a new step).
+  async function completeIfDone(tid) {
+    const s2 = await run(`UPDATE trips SET status='settled' WHERE id=? AND status='settling'
+      AND NOT EXISTS (SELECT 1 FROM requests WHERE trip_id=? AND status IN ${OPEN})`, tid, tid);
+    if (s2.changes) await log(tid, null, "trip", "Trip settled", "").catch(() => {});
   }
 
   // Nothing bought (every item not found): void all holds, no receipt needed.
@@ -351,7 +360,7 @@ export function makeTrips(db, pp = paypal) {
   }
 
   async function summary(t, friendId) {
-    const rs = await all(`SELECT status, hold, charged, released, cap, plan_op FROM requests WHERE trip_id=? AND status<>'withdrawn'${friendId ? " AND friend_id=?" : ""}`, ...(friendId ? [t.id, friendId] : [t.id]));
+    const rs = await all(`SELECT status, hold, charged, released, cap, plan_op, plan_charge FROM requests WHERE trip_id=? AND status<>'withdrawn'${friendId ? " AND friend_id=?" : ""}`, ...(friendId ? [t.id, friendId] : [t.id]));
     const held = rs.filter((r) => OUTSTANDING.includes(r.status)).reduce((s2, r) => s2 + (r.hold || 0), 0);
     const charged = rs.reduce((s2, r) => s2 + (r.charged || 0), 0);
     const waiting = rs.filter((r) => r.status === "asked").length;
@@ -360,8 +369,13 @@ export function makeTrips(db, pp = paypal) {
     const toConfirm = rs.filter((r) => r.status === "settled").length;
     const out = rs.filter((r) => ["dropped", "declined"].includes(r.status)).length;
     const released = rs.filter((r) => r.status === "released").length;
-    const pending = rs.filter((r) => r.plan_op && OUTSTANDING.includes(r.status)).length;
-    return { count: rs.length, held, charged, waiting, toHold, swaps: t.status === "shopping" ? swaps : 0, toConfirm, out, released, pending };
+    // Saved steps PayPal hasn't confirmed: their amounts are kept apart from "held", which only
+    // counts authorizations with no step pending.
+    const P = rs.filter((r) => r.plan_op && OUTSTANDING.includes(r.status));
+    const pendingCharge = P.filter((r) => r.plan_op === "capture").reduce((a, r) => a + (r.plan_charge || 0), 0);
+    const pendingRelease = P.filter((r) => r.plan_op === "void").reduce((a, r) => a + (r.hold || 0), 0);
+    const heldClean = rs.filter((r) => OUTSTANDING.includes(r.status) && !r.plan_op).reduce((a, r) => a + (r.hold || 0), 0);
+    return { count: rs.length, held, heldClean, charged, waiting, toHold, swaps: t.status === "shopping" ? swaps : 0, toConfirm, out, released, pending: P.length, pendingCharge, pendingRelease };
   }
 
   async function tripsFor(u) {

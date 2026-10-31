@@ -142,6 +142,34 @@ await bima.p.unroute("**/api/join/nope");
   await bima.p.unroute("**/api/ai/item");
 }
 
+// 32. a release PayPal hasn't confirmed shows Retry even while still collecting holds
+{
+  const { DatabaseSync } = await import("node:sqlite");
+  const d4 = await person("Dina4"), f4 = await person("Fia");
+  const t4 = (await d4.call("/api/trips", { home_code: "CGK", city_code: "HND", depart: d(1), ret: d(5), fee: 100 })).trip;
+  const inv4 = (await d4.call(`/api/trips/${t4.id}`)).trip.invite;
+  const r4 = (await f4.call(`/api/join/${inv4}/requests`, { title: "Pocky", cap: 400 })).request;
+  await d4.call(`/api/requests/${r4.id}/decide`, { accept: true }); await d4.call(`/api/trips/${t4.id}/day`, { day: "Mon" });
+  // the state left by "withdrawn while PayPal approved, release not confirmed" (written straight to the test DB)
+  const db = new DatabaseSync(process.env.DB_FILE || "/tmp/jastip-fake-5181.db");
+  db.prepare("UPDATE requests SET status='releasing', auth_id='FAKE-AUTH-x', hold=500, plan_op='void', plan_charge=0, plan_why='withdrawn while PayPal was approving' WHERE id=?").run(r4.id);
+  db.close();
+  await d4.p.goto(`/#/trip/${t4.id}`); await d4.p.reload(); await d4.p.waitForSelector(".trk");
+  const txt = await d4.p.locator("main").innerText();
+  ok(await d4.p.locator("[data-retry]").locator("visible=true").count() > 0 && /not confirmed/.test(txt), "holds phase: pending release shows Retry", txt.match(/\d PayPal step[^\n]*/)?.[0]);
+  await d4.p.locator("[data-retry]").locator("visible=true").first().click(); await d4.p.waitForTimeout(1500);
+  const after = (await d4.call(`/api/trips/${t4.id}`));
+  ok(after.requests[0].status === "released" && after.trip.status === "holds", "retry releases it; trip still collecting holds");
+  // 24. an unconfirmed capture on the friend's home: "charge pending", never "held"
+  const db2 = new DatabaseSync(process.env.DB_FILE || "/tmp/jastip-fake-5181.db");
+  db2.prepare("UPDATE requests SET status='found', auth_id='FAKE-AUTH-y', hold=500, plan_op='capture', plan_charge=388, plan_why=NULL WHERE id=?").run(r4.id);
+  db2.prepare("UPDATE trips SET status='settling' WHERE id=?").run(t4.id);
+  db2.close();
+  await f4.p.goto(`/#/`); await f4.p.reload(); await f4.p.waitForSelector(".trip");
+  const home4 = await f4.p.locator(".trip").first().innerText();
+  ok(/charge pending/.test(home4) && !/held/.test(home4), "friend home: unconfirmed capture reads 'charge pending', not 'held'", home4.replace(/\n/g, " | "));
+}
+
 // 3. a stranger cannot open the trip
 const zed = await person("Zed");
 ok((await zed.call(`/api/trips/${trip.id}`)).status === 404, "stranger gets 404 on the trip");

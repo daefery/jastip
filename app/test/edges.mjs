@@ -342,4 +342,53 @@ async function shopping(names) {
   const a = await T.request(people[0].r.id);
   ok(e && /changed/.test(e.message) && (await tripOf(tid)).status === "shopping" && !a.plan_op && !a.charged, "list changed after the receipt: nothing saved, nothing charged", e?.message);
 }
+
+// 20. one ask, withdrawn while PayPal approves, release fails: retry works while still collecting holds (round 5 #32)
+{
+  const s7 = await setup([["Ayu", 7000]]);
+  await T.decide(await tripOf(s7.tid), s7.dina, s7.people[0].r.id, true);
+  await T.setShopDay(await tripOf(s7.tid), s7.dina, "Mon");
+  await T.startHold(await tripOf(s7.tid), s7.people[0].f, s7.people[0].r.id, "http://x");
+  let release; authGate = new Promise((r) => (release = r)); sameAuth = true;
+  const order = (await T.request(s7.people[0].r.id)).order_id;
+  failVoid.add(`AUTH-${order}`);
+  const pending = T.finishHold(s7.people[0].r.id).catch((x) => x);
+  await new Promise((r) => setTimeout(r, 20));
+  await T.withdraw(await tripOf(s7.tid), s7.people[0].f, s7.people[0].r.id);
+  release(); authGate = null;
+  await pending; sameAuth = false;
+  const v = await T.view(await tripOf(s7.tid), s7.dina);
+  ok(v.requests.some((x) => x.status === "releasing" && x.plan_op === "void") && (await tripOf(s7.tid)).status === "holds", "owner sees the pending release while still collecting holds");
+  failVoid.clear();
+  const out = await T.retry(await tripOf(s7.tid), s7.dina);
+  ok(out[0]?.released && (await T.request(s7.people[0].r.id)).status === "released" && (await tripOf(s7.tid)).status === "holds", "retry in 'holds' releases it and keeps the trip collecting", JSON.stringify(out));
+}
+// 21. completion can't overwrite a late void saved in between (round 5 #33)
+{
+  const s8 = await setup([["Ayu", 1200], ["Late", 900]]);
+  for (const p of s8.people) await T.decide(await tripOf(s8.tid), s8.dina, p.r.id, true);
+  await T.setShopDay(await tripOf(s8.tid), s8.dina, "Mon");
+  await hold(s8.tid, s8.people[0]);
+  await T.startHold(await tripOf(s8.tid), s8.people[1].f, s8.people[1].r.id, "http://x");
+  let releaseAuth; authGate = new Promise((r) => (releaseAuth = r)); sameAuth = true;
+  const order = (await T.request(s8.people[1].r.id)).order_id;
+  const late = T.finishHold(s8.people[1].r.id).catch((x) => x);
+  await new Promise((r) => setTimeout(r, 20));
+  await T.startShopping(await tripOf(s8.tid), s8.dina);
+  await T.mark(await tripOf(s8.tid), s8.dina, s8.people[0].r.id, "not_found");
+  // pause the finishing call right before its completion statement, let the late approval land, then resume
+  const realRun = db.run;
+  let open, gate = new Promise((r) => (open = r)), hit, reached = new Promise((r) => (hit = r)), armed = true;
+  db.run = async (sql, ...a) => { if (armed && /SET status='settled'/.test(sql)) { armed = false; hit(); await gate; } return realRun(sql, ...a); };
+  failVoid.add(`AUTH-${order}`);
+  const fin = T.finishEmpty(await tripOf(s8.tid), s8.dina).catch((x) => x);
+  await reached;                       // finishing is paused at its completion statement
+  releaseAuth(); authGate = null;      // the late approval lands now, saves its void, the void fails
+  await late; sameAuth = false;
+  open();                              // let the finishing call's completion statement run
+  await fin; db.run = realRun;
+  const t8 = await tripOf(s8.tid), b = await T.request(s8.people[1].r.id);
+  ok(b.status === "releasing" && t8.status === "settling", "late void saved during completion: trip stays settling", `${t8.status} ${b.status}`);
+  failVoid.clear();
+}
 console.log(`\n${res.filter(Boolean).length}/${res.length} passed`); process.exit(res.every(Boolean) ? 0 : 1);
