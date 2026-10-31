@@ -18,6 +18,16 @@ export default {
             return `r2:receipts/${rid}`;
           }
         : null;
+      // Sample receipt: stored reading, keyed by the sha-256 of the data URL the app sends.
+      globalThis.__JASTIP_SAMPLES__ = {};
+      try {
+        const get = (p) => env.ASSETS.fetch(new Request("https://assets.local" + p));
+        const png = new Uint8Array(await (await get("/sample/receipt.png")).arrayBuffer());
+        let bin = ""; for (let i = 0; i < png.length; i += 0x8000) bin += String.fromCharCode(...png.subarray(i, i + 0x8000));
+        const url = "data:image/png;base64," + btoa(bin);
+        const h = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(url)))].map((b) => b.toString(16).padStart(2, "0")).join("");
+        globalThis.__JASTIP_SAMPLES__[h] = await (await get("/sample/receipt.json")).json();
+      } catch { /* sample falls back to a normal AI read */ }
       handle = makeApi(d1(env.DB), { saveImage });
     }
     const res = await handle(req);

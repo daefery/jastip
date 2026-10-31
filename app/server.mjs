@@ -15,6 +15,16 @@ await loadDotEnv(DIR);
 const db = await nodeSqlite(env("DB_FILE") || join(DIR, "data", "jastip.db"));
 const UPLOADS = join(DIR, "data", "receipts");
 await mkdir(UPLOADS, { recursive: true });
+// Sample receipts with stored readings, keyed by the sha-256 of the exact data URL the app sends.
+{
+  const { createHash } = await import("node:crypto");
+  globalThis.__JASTIP_SAMPLES__ = {};
+  for (const name of ["receipt"]) {
+    const png = await readFile(join(DIR, "public", "sample", `${name}.png`));
+    const url = "data:image/png;base64," + png.toString("base64");
+    globalThis.__JASTIP_SAMPLES__[createHash("sha256").update(url).digest("hex")] = JSON.parse(await readFile(join(DIR, "public", "sample", `${name}.json`), "utf8"));
+  }
+}
 const handle = makeApi(db, {
   saveImage: async (rid, dataUrl) => { const f = join(UPLOADS, `${rid}.img`); await writeFile(f, Buffer.from(dataUrl.split(",")[1], "base64")); return f; },
 });

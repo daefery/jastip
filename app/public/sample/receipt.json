@@ -1,0 +1,33 @@
+{
+ "note": "Reading of receipt.png (synthetic Don Quijote Shibuya receipt made for the demo), checked by hand. Stored so the sample needs no image AI call; asks are still matched to these lines by AI.",
+ "shop": "ドン・キホーテ 渋谷本店",
+ "currency": "JPY",
+ "total": 2959,
+ "lines": [
+  {
+   "n": 1,
+   "text": "KITKAT ｵﾄﾅﾉｱﾏｻ 抹茶 大袋",
+   "price": 1188
+  },
+  {
+   "n": 2,
+   "text": "東京ﾊﾞﾅﾅ ﾐｴﾀｯﾀ 4個入",
+   "price": 648
+  },
+  {
+   "n": 3,
+   "text": "ﾊﾀﾞﾗﾎﾞ 極潤 ﾋｱﾙﾛﾝ液 170ml",
+   "price": 968
+  },
+  {
+   "n": 4,
+   "text": "ｼﾞｬｶﾞﾘｺ ｻﾗﾀﾞ",
+   "price": 150
+  },
+  {
+   "n": 5,
+   "text": "ﾚｼﾞ袋 L",
+   "price": 5
+  }
+ ]
+}

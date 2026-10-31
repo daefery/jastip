@@ -33,7 +33,8 @@ Jastip fixes the money part with PayPal:
 4. Friend: **Hold with PayPal** → log in with the sandbox buyer below → approve.
    Back in the app: "Hold approved. ¥0 charged."
 5. Traveller: **Start shopping** → **Found** → **Pay & scan receipt** → **Use sample receipt**
-   (a Don Quijote Tokyo receipt) → check the charges → **Charge**.
+   (a Don Quijote Tokyo receipt with Matcha KitKat, Tokyo Banana, Hada Labo, Jagarico) → check
+   the charges → **Charge**. Or photograph a real receipt.
    The friend sees the exact charge and how much of the hold was never taken; then **I got my item**.
 
 **PayPal sandbox buyer (test money only):** see the testing instructions on the Devpost
@@ -62,6 +63,13 @@ See [`spikes/README.md`](spikes/README.md).
 | Ask screen | Cloudflare Workers AI, `@cf/google/gemma-4-26b-a4b-it` | Turns a pasted TikTok/shop link or slang ("matcha kitkat otona") into an item name, variant and a rough local shelf price, used to suggest the max price |
 | Receipt | same model (vision) | Reads every receipt line (Japanese, Indonesian, English, discounts) and says which line answers which ask, with a confidence |
 | Settlement | **code, not AI** | Folds discounts into the line above, caps each charge at the friend's max (or the agreed swap price), adds the fee, never more than the hold. Lines matched to no ask are voided |
+
+**Runs on Cloudflare's free tier** (10,000 Workers AI neurons a day, reset at 00:00 UTC; a receipt
+photo costs about 25 to 75, an item lookup a few). To stay inside it: identical item lookups and
+identical receipt scans are answered from a cache, each person gets 20 lookups and 6 receipt scans an
+hour, the built-in **sample receipt** has its lines stored with the app (only the short text matching
+goes to the AI), and if the daily allowance is ever used up the app keeps working: item lookup falls
+back to plain text and the receipt sheet says when the reader is back. Holds are never affected.
 
 Measured on 5 synthetic receipts / 20 asks: Gemma 4 on Workers AI 19/20 (about 10 to 12 s per
 receipt live). The one miss is a decoy item; the traveller sees every match before anything is

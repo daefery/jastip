@@ -69,11 +69,39 @@ export function makeApi(db, { saveImage } = {}) {
     const b = await body(req);
     return { request: await T.addRequest(t, await needMe(req), { ...b, cap: toMinor(b.cap, t.currency), typical: b.typical ? toMinor(b.typical, t.currency) : null }) };
   });
+  // AI budget (Workers AI free tier: 10,000 neurons/day, about 25-75 per receipt, under 5 per item lookup).
+  //  - identical inputs are answered from ai_cache (same photo, same item text),
+  //  - each person gets a few AI calls per hour,
+  //  - when the daily allocation is gone, item lookup falls back to plain text (the app still works).
+  const LIMITS = { item: 20, receipt: 6 }; // per person per hour
+  const sha = async (s) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)))].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const cached = async (key) => { const r = await db.get("SELECT value FROM ai_cache WHERE key=?", key); return r ? JSON.parse(r.value) : null; };
+  const remember = (key, kind, value) => db.run("INSERT OR REPLACE INTO ai_cache(key,kind,value,created_at) VALUES(?,?,?,?)", key, kind, JSON.stringify(value), Date.now());
+  const spend = async (u, kind) => {
+    const hour = Math.floor(Date.now() / 3600e3);
+    await db.run("INSERT INTO ai_use(user_id,kind,hour,n) VALUES(?,?,?,1) ON CONFLICT(user_id,kind,hour) DO UPDATE SET n=n+1", u.id, kind, hour);
+    const r = await db.get("SELECT n FROM ai_use WHERE user_id=? AND kind=? AND hour=?", u.id, kind, hour);
+    return r.n <= LIMITS[kind];
+  };
+  // Sample receipts: the image is fixed, so its lines are stored with the app (public/sample/*.json,
+  // checked by hand). Only the matching of asks to lines goes to the AI: a short text call, no image.
+  const SAMPLES = globalThis.__JASTIP_SAMPLES__ || {};
+  const sampleReading = async (image, reqs) => {
+    const s = SAMPLES[await sha(image)]; if (!s) return null;
+    const { matches, model } = await ai.matchLines(s.lines, reqs);
+    return { shop: s.shop, currency: s.currency, total: s.total, lines: s.lines.map(({ n, text, price }) => ({ n, text, price })), matches, model: `${model} (sample lines stored)` };
+  };
+  const plainItem = (text) => ({ title: String(text).replace(/https?:\/\/\S+/g, "").trim().slice(0, 40) || "Item", detail: "", typical: 0, art: "other", ai: false });
+
   on("POST", "/api/ai/item", async (req) => {
-    await needMe(req); const b = await body(req);
-    if (!ai.aiReady()) return { title: String(b.text).slice(0, 40), detail: "", typical: 0, art: "other", ai: false };
-    try { return { ...(await ai.readRequest(String(b.text).slice(0, 500), b.currency, b.city)), ai: true }; }
-    catch { return { title: String(b.text).replace(/https?:\/\/\S+/g, "").trim().slice(0, 40) || "Item", detail: "", typical: 0, art: "other", ai: false }; }
+    const u = await needMe(req); const b = await body(req);
+    const text = String(b.text || "").slice(0, 500);
+    if (!ai.aiReady()) return plainItem(text);
+    const key = "item:" + (await sha(`${text.trim().toLowerCase()}|${b.currency}|${b.city}`));
+    const hit = await cached(key); if (hit) return { ...hit, ai: true };
+    if (!(await spend(u, "item"))) return plainItem(text);
+    try { const r = await ai.readRequest(text, b.currency, b.city); await remember(key, "item", r); return { ...r, ai: true }; }
+    catch { return plainItem(text); }
   });
   on("DELETE", "/api/requests/:rid", async (req, p) => { await T.withdraw(await tripOfReq(p.rid), await needMe(req), p.rid); return { ok: true }; });
   on("POST", "/api/requests/:rid/decide", async (req, p) => { const b = await body(req); await T.decide(await tripOfReq(p.rid), await needMe(req), p.rid, !!b.accept, !!b.vouch); return { ok: true }; });
@@ -97,12 +125,19 @@ export function makeApi(db, { saveImage } = {}) {
     const reqs = await T.markable(t.id);
     if (!reqs.length) throw new Rule("Mark at least one item as found first");
     if (!ai.aiReady()) throw new Rule("AI is not configured on this server", 503);
-    let read;
-    try { read = await ai.readReceipt(b.image, reqs); }
-    catch (e) {
-      await T.log(t.id, null, "ai", "Receipt read failed", e.message.slice(0, 280), 0);
-      if (e instanceof ai.AiBusy) throw new Rule("The receipt reader has hit today's limit. Try again in a few hours; your holds stay in place.", 503);
-      throw new Rule("Couldn't read that photo. Try again, with the whole receipt flat and in good light.", 422);
+    // Same photo + same asks = same reading, so a retake of the same image or a reload costs nothing.
+    // The built-in sample receipts were read once and stored (public/sample/*.json): no AI call at all.
+    const key = "rx:" + (await sha(b.image + "|" + reqs.map((r) => `${r.id}:${r.swap_title || r.title}`).join(",")));
+    const isSample = !!SAMPLES[await sha(b.image)];
+    let read = await cached(key);
+    if (!read) {
+      if (!(await spend(u, "receipt"))) throw new Rule("That's a lot of receipt scans this hour. Wait a bit and try again; your holds stay in place.", 429);
+      try { read = isSample ? await sampleReading(b.image, reqs) : await ai.readReceipt(b.image, reqs); await remember(key, "receipt", read); }
+      catch (e) {
+        await T.log(t.id, null, "ai", "Receipt read failed", e.message.slice(0, 280), 0);
+        if (e instanceof ai.AiBusy) throw new Rule("The receipt reader is resting until 07:00 WIB (its free daily limit). Try the sample receipt, or come back later; your holds stay in place.", 503);
+        throw new Rule("Couldn't read that photo. Try again, with the whole receipt flat and in good light.", 422);
+      }
     }
     const lines = ai.foldDiscounts(read.lines).map((l) => ({ n: l.n, text: String(l.text).slice(0, 80), price: toMinor(l.price, t.currency), disc: !!l.disc }));
     const rid = id(10);

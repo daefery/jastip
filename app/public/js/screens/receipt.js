@@ -22,7 +22,8 @@ export function receiptFlow(v, done) {
     try { const r = await api(`/api/trips/${t.id}/receipt`, { body: { image: dataUrl } }); clearInterval(tick); plan(r, Math.round((Date.now() - t0) / 1000)); }
     catch (e) {
       clearInterval(tick);
-      box.innerHTML = `<div class="empty" style="padding:20px"><b>Couldn't read it</b><span>${esc(e.message)}</span></div><button class="btn dark" id="rx-again">Try again</button>`;
+      const resting = e.status === 503 || e.status === 429;
+      box.innerHTML = `<div class="empty" style="padding:20px"><b>${resting ? "The receipt reader is resting" : "Couldn't read it"}</b><span>${esc(e.message)}</span></div><button class="btn dark" id="rx-again">${resting ? "OK" : "Try again"}</button>`;
       box.querySelector("#rx-again").onclick = () => { s.close(); setTimeout(() => receiptFlow(v, done), 300); };
     }
   };

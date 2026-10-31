@@ -67,15 +67,27 @@ Rules:
 - A similar but different product is not a match (a strainer is not a container; brush cleaner is not a brush set).
 - Do not invent lines. If unreadable, return empty lines and null matches.`;
 
+// An agreed swap replaces the original ask, so its old size/variant detail is not sent (a "4 pack" swap
+// for an "8 pack" ask would otherwise be rejected as a different product).
 export async function readReceipt(imageDataUrl, requests) {
   const { data, model: m } = await chat([
     { role: "system", content: RECEIPT_SYSTEM },
     { role: "user", content: [
-      { type: "text", text: "Open requests:\n" + JSON.stringify(requests.map((r) => ({ request_id: r.id, item: r.swap_title || r.title, detail: r.detail })), null, 1) },
+      { type: "text", text: "Open requests:\n" + JSON.stringify(requests.map((r) => ({ request_id: r.id, item: r.swap_title || r.title, detail: r.swap_title ? "" : r.detail })), null, 1) },
       { type: "image_url", image_url: { url: imageDataUrl } },
     ] },
   ]);
   return { ...data, model: m };
+}
+
+// Match asks to receipt lines that are already known (sample receipt): text only, no image, so it costs
+// a fraction of a photo read. Same rules as the photo prompt.
+export async function matchLines(lines, requests) {
+  const { data, model: m } = await chat([
+    { role: "system", content: `Match each request to at most one receipt line by meaning (brand, product, size). A similar but different product is not a match. If the item is not on the receipt, line_n is null. Return JSON only: {"matches":[{"request_id":"...","line_n":3,"confidence":0.9}]}` },
+    { role: "user", content: "Receipt lines:\n" + JSON.stringify(lines.map(({ n, text, price }) => ({ n, text, price }))) + "\nRequests:\n" + JSON.stringify(requests.map((r) => ({ request_id: r.id, item: r.swap_title || r.title, detail: r.swap_title ? "" : r.detail }))) },
+  ]);
+  return { matches: data.matches || [], model: m };
 }
 
 // Lines that are never a bought item, whatever the model says: totals, tax, payment, change, points.

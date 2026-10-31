@@ -36,6 +36,13 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE TABLE IF NOT EXISTS sessions (
   token TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), created_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS ai_cache (
+  key TEXT PRIMARY KEY, kind TEXT NOT NULL, value TEXT NOT NULL, created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS ai_use (
+  user_id TEXT NOT NULL, kind TEXT NOT NULL, hour INTEGER NOT NULL, n INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (user_id, kind, hour)
+);
 CREATE INDEX IF NOT EXISTS req_trip ON requests(trip_id);
 CREATE INDEX IF NOT EXISTS req_friend ON requests(friend_id);
 CREATE INDEX IF NOT EXISTS ev_trip ON events(trip_id, id);
