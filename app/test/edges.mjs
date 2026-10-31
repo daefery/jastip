@@ -5,13 +5,14 @@ import { makeTrips } from "../lib/trips.mjs";
 
 const res = []; const ok = (c, w, x = "") => { res.push(!!c); console.log(`${c ? "PASS" : "FAIL"}  ${w}${x ? "  " + x : ""}`); };
 const failCapture = new Set(), failVoid = new Set();
+let authGate = null, sameAuth = false; const voided = [];
 let n = 0;
 const pp = {
   fake: () => true, paypalReady: () => true,
   createHold: async () => ({ orderId: `O${++n}`, approve: "x" }),
-  authorizeOrder: async () => ({ authId: `A${++n}`, status: "CREATED" }),
+  authorizeOrder: async (orderId) => { if (authGate) await authGate; return { authId: sameAuth ? `AUTH-${orderId}` : `A${++n}`, status: "CREATED" }; },
   capture: async (authId) => { if (failCapture.has(authId)) throw new Error("PayPal 503"); return { captureId: `C${++n}`, status: "COMPLETED" }; },
-  voidHold: async (authId) => { if (failVoid.has(authId)) throw new Error("PayPal 503 on void"); return { status: "VOIDED" }; },
+  voidHold: async (authId) => { if (failVoid.has(authId)) throw new Error("PayPal 503 on void"); voided.push(authId); return { status: "VOIDED" }; },
 };
 const db = await nodeSqlite(":memory:");
 const T = makeTrips(db, pp);
@@ -180,5 +181,90 @@ async function shopping(names) {
   const t1 = await tripOf(tid), plan = await T.planSettlement(t1, read);
   const both = await Promise.allSettled([T.settle(t1, dina, plan, "A"), T.settle(t1, dina, plan, "B")]);
   ok(both.filter((x) => x.status === "fulfilled").length === 1 && (await T.request(people[0].r.id)).charged === 1288, "two settle taps at once: one runs, one is refused");
+}
+
+// 11. plan save fails half-way: nothing saved, trip still shopping, settle works afterwards (round 3 #19)
+{
+  const { dina, tid, people } = await shopping([["Ayu", 1500], ["Bima", 1300]]);
+  for (const p of people) await T.mark(await tripOf(tid), dina, p.r.id, "found");
+  const read = { lines: [{ n: 1, text: "KitKat", price: 1188 }, { n: 2, text: "Banana", price: 1000 }], matches: [{ request_id: people[0].r.id, line_n: 1 }, { request_id: people[1].r.id, line_n: 2 }] };
+  const realBatch = db.batch; let calls = 0;
+  db.batch = async (list) => realBatch(list.map((q, i) => (i === 2 && ++calls ? ["UPDATE nope SET x=1"] : q)));
+  let e; try { await T.settle(await tripOf(tid), dina, await T.planSettlement(await tripOf(tid), read), "RCX"); } catch (x) { e = x; }
+  db.batch = realBatch;
+  const a = await T.request(people[0].r.id);
+  ok(e && (await tripOf(tid)).status === "shopping" && !a.plan_op, "plan save fails: all rolled back, trip still shopping", e?.message);
+  const out = await T.settle(await tripOf(tid), dina, await T.planSettlement(await tripOf(tid), read), "RCX");
+  ok(out.filter((x) => x.charged).length === 2, "settle works after the rollback");
+}
+// 12. stale "start shopping" can't reopen a settling trip or rewrite its plan (#20)
+{
+  const { dina, tid, people } = await shopping([["Ayu", 1500], ["Bima", 1500]]);
+  const stale = await tripOf(tid);
+  for (const p of people) await T.mark(await tripOf(tid), dina, p.r.id, "found");
+  failVoid.add((await T.request(people[1].r.id)).auth_id);
+  const read = { lines: [{ n: 1, text: "KitKat", price: 800 }], matches: [{ request_id: people[0].r.id, line_n: 1 }, { request_id: people[1].r.id, line_n: 1 }] };
+  await T.settle(await tripOf(tid), dina, await T.planSettlement(await tripOf(tid), read), "RC5");
+  let e1, e2, e3; try { await T.startShopping({ ...stale, status: "holds" }, dina); } catch (x) { e1 = x; }
+  try { await T.mark({ ...stale, status: "shopping" }, dina, people[1].r.id, "found"); } catch (x) { e2 = x; }
+  try { await T.settle({ ...stale, status: "shopping" }, dina, await T.planSettlement(await tripOf(tid), read), "RC6"); } catch (x) { e3 = x; }
+  const b = await T.request(people[1].r.id);
+  ok(e1 && e2 && e3 && (await tripOf(tid)).status === "settling" && b.plan_op === "void", "stale shop/mark/settle all refused, saved void unchanged", [e1?.message, e2?.message, e3?.message].join(" | "));
+  failVoid.clear(); await T.retry(await tripOf(tid), dina);
+  ok((await T.request(people[1].r.id)).charged === 0, "B is released, never charged");
+}
+// 13. late authorization whose release fails: the auth id is kept and retried (#21)
+{
+  const s2 = await setup([["Ayu", 1200], ["Late", 900]]);
+  for (const p of s2.people) await T.decide(await tripOf(s2.tid), s2.dina, p.r.id, true);
+  await T.setShopDay(await tripOf(s2.tid), s2.dina, "Mon");
+  await hold(s2.tid, s2.people[0]);
+  await T.startHold(await tripOf(s2.tid), s2.people[1].f, s2.people[1].r.id, "http://x");
+  let release; authGate = new Promise((r) => (release = r)); sameAuth = true;
+  const lateOrder = (await T.request(s2.people[1].r.id)).order_id;
+  failVoid.add(`AUTH-${lateOrder}`);
+  const pending = T.finishHold(s2.people[1].r.id).catch((x) => x);
+  await new Promise((r) => setTimeout(r, 20));
+  await T.startShopping(await tripOf(s2.tid), s2.dina);
+  release(); authGate = null;
+  const e = await pending;
+  const late = await T.request(s2.people[1].r.id);
+  ok(/hasn't confirmed/.test(e?.message) && late.auth_id === `AUTH-${lateOrder}` && late.plan_op === "void" && late.status === "releasing", "late auth + failed release: auth kept as an open void, honest message", e?.message);
+  await T.mark(await tripOf(s2.tid), s2.dina, s2.people[0].r.id, "not_found");
+  let e2; try { await T.finishEmpty(await tripOf(s2.tid), s2.dina); } catch (x) { e2 = x; }
+  const tNow = await tripOf(s2.tid);
+  ok(tNow.status === "settling" || e2, "trip can't silently settle while that release is open", tNow.status + " " + (e2?.message || ""));
+  failVoid.clear();
+  if (tNow.status === "shopping") await T.finishEmpty(tNow, s2.dina);
+  await T.retry(await tripOf(s2.tid), s2.dina).catch(() => {});
+  ok((await T.request(s2.people[1].r.id)).status === "released" && voided.includes(`AUTH-${lateOrder}`) && (await tripOf(s2.tid)).status === "settled", "retry releases the late auth, trip settles");
+  sameAuth = false;
+}
+// 14. two PayPal returns at once with the same authorization: kept, never voided (#22)
+{
+  const s3 = await setup([["Ayu", 1200]]);
+  await T.decide(await tripOf(s3.tid), s3.dina, s3.people[0].r.id, true);
+  await T.setShopDay(await tripOf(s3.tid), s3.dina, "Mon");
+  await T.startHold(await tripOf(s3.tid), s3.people[0].f, s3.people[0].r.id, "http://x");
+  sameAuth = true; voided.length = 0;
+  const both = await Promise.allSettled([T.finishHold(s3.people[0].r.id), T.finishHold(s3.people[0].r.id)]);
+  sameAuth = false;
+  const r = await T.request(s3.people[0].r.id);
+  ok(both.every((x) => x.status === "fulfilled") && r.status === "held" && !voided.length, "parallel returns: both succeed, hold kept, nothing voided", JSON.stringify(both.map((x) => x.status)));
+}
+// 15. a swap answer after the receipt is refused (#24)
+{
+  const { dina, tid, people } = await shopping([["Ayu", 1500], ["Bima", 1300]]);
+  await T.mark(await tripOf(tid), dina, people[0].r.id, "found");
+  await T.mark(await tripOf(tid), dina, people[1].r.id, "swap", { title: "Small one", price: 600 });
+  const read = { lines: [{ n: 1, text: "KitKat", price: 1188 }], matches: [{ request_id: people[0].r.id, line_n: 1 }] };
+  failVoid.add((await T.request(people[1].r.id)).auth_id);
+  await T.settle(await tripOf(tid), dina, await T.planSettlement(await tripOf(tid), read), "RC7");
+  const before = await T.request(people[1].r.id);
+  let e; try { await T.answerSwap(await tripOf(tid), people[1].f, people[1].r.id, true); } catch (x) { e = x; }
+  const after = await T.request(people[1].r.id);
+  ok(before.status === "swap_asked" && e && /Too late/.test(e.message) && after.status === "swap_asked" && after.plan_op === "void", "late swap answer refused while its release is pending", e?.message);
+  failVoid.clear(); await T.retry(await tripOf(tid), dina);
+  ok((await T.request(people[1].r.id)).status === "released", "then the retry releases it");
 }
 console.log(`\n${res.filter(Boolean).length}/${res.length} passed`); process.exit(res.every(Boolean) ? 0 : 1);

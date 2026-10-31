@@ -2,6 +2,7 @@
 //   db.get(sql, ...args)  -> row | null
 //   db.all(sql, ...args)  -> rows[]
 //   db.run(sql, ...args)  -> { changes }
+//   db.batch([[sql, ...args], ...]) -> [{ changes }]  all-or-nothing (D1 batch / SQLite transaction)
 export const SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, color TEXT NOT NULL, created_at INTEGER NOT NULL,
@@ -12,7 +13,7 @@ CREATE TABLE IF NOT EXISTS trips (
   home TEXT NOT NULL, home_code TEXT NOT NULL, city TEXT NOT NULL, city_code TEXT NOT NULL,
   currency TEXT NOT NULL, depart TEXT NOT NULL, ret TEXT NOT NULL,
   fee INTEGER NOT NULL, payee_email TEXT,
-  shop_day TEXT, status TEXT NOT NULL DEFAULT 'open', receipt_id TEXT,
+  shop_day TEXT, status TEXT NOT NULL DEFAULT 'open', receipt_id TEXT, settle_id TEXT,
   invite TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS requests (
@@ -45,6 +46,7 @@ export function d1(D1) {
     get: async (sql, ...a) => (await D1.prepare(sql).bind(...a).first()) ?? null,
     all: async (sql, ...a) => (await D1.prepare(sql).bind(...a).all()).results ?? [],
     run: async (sql, ...a) => ({ changes: (await D1.prepare(sql).bind(...a).run()).meta?.changes ?? 0 }),
+    batch: async (list) => (await D1.batch(list.map(([sql, ...a]) => D1.prepare(sql).bind(...a)))).map((r) => ({ changes: r.meta?.changes ?? 0 })),
   };
 }
 
@@ -62,11 +64,17 @@ export async function nodeSqlite(file) {
     if (!cols.includes(c)) db.exec(`ALTER TABLE requests ADD COLUMN ${c} ${ty}`);
   const tcols = db.prepare("PRAGMA table_info(trips)").all().map((c) => c.name);
   if (!tcols.includes("receipt_id")) db.exec("ALTER TABLE trips ADD COLUMN receipt_id TEXT");
+  if (!tcols.includes("settle_id")) db.exec("ALTER TABLE trips ADD COLUMN settle_id TEXT");
   const norm = (a) => a.map((x) => (x === undefined ? null : x));
   return {
     get: async (sql, ...a) => db.prepare(sql).get(...norm(a)) ?? null,
     all: async (sql, ...a) => db.prepare(sql).all(...norm(a)),
     run: async (sql, ...a) => ({ changes: Number(db.prepare(sql).run(...norm(a)).changes) }),
+    batch: async (list) => {
+      db.exec("BEGIN IMMEDIATE");
+      try { const out = list.map(([sql, ...a]) => ({ changes: Number(db.prepare(sql).run(...norm(a)).changes) })); db.exec("COMMIT"); return out; }
+      catch (e) { db.exec("ROLLBACK"); throw e; }
+    },
   };
 }
 

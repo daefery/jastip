@@ -51,6 +51,7 @@ const ROLE_ST = {
   open: ["Taking asks", "gray"], holds: ["Holds open", "blue"], shopping: ["Shopping", "orange"], settling: ["Payment problem", "red"], settled: ["Paid", "green"],
 };
 function friendStatus(sum, t) {
+  if (sum.pending) return ["Paying…", "orange"];
   if (sum.swaps) return ["Pick a swap", "orange"];
   if (sum.toHold && t.status === "holds") return ["Approve hold", "orange"];
   if (sum.toConfirm) return ["Got it?", "orange"];
@@ -111,11 +112,12 @@ export async function route() {
   const params = new URLSearchParams(qs || "");
   const parts = path.split("/").filter(Boolean);
   try {
-    if (parts[0] === "join") return void (await joinView(app, parts[1]));
+    if (parts[0] === "join") return void (await joinView(app, parts[1], my));
     if (!store.me) return welcome(route);
     await refreshMe();
+    if (!owns(my)) return; // the user already went somewhere else
     if (parts[0] === "new") newTripView(app);
-    else if (parts[0] === "trip") await tripView(app, parts[1], { rid: parts[2] === "r" ? parts[3] : null, params });
+    else if (parts[0] === "trip") await tripView(app, parts[1], { rid: parts[2] === "r" ? parts[3] : null, params, route: my });
     else home();
   } catch (e) { if (!owns(my)) return; toast(e.message, "err"); if (e.status === 404) location.hash = "#/"; }
   if (owns(my)) scrollTo({ top: 0 });

@@ -77,13 +77,16 @@ export function makeTrips(db, pp = paypal) {
     if (!isOwner(t, owner)) throw new Rule("Only the traveller decides", 403);
     const r = await request(rid);
     if (!r || r.trip_id !== t.id || !["asked", "accepted", "declined"].includes(r.status)) throw new Rule("Can't change this request");
-    await run("UPDATE requests SET status=? WHERE id=?", accept ? "accepted" : "declined", rid);
+    const ok = await run(`UPDATE requests SET status=? WHERE id=? AND status IN ('asked','accepted','declined')
+      AND EXISTS (SELECT 1 FROM trips WHERE id=? AND status IN ('open','holds'))`, accept ? "accepted" : "declined", rid, t.id);
+    if (!ok.changes) throw new Rule("Shopping has already started");
   }
 
   async function setShopDay(t, owner, day) {
     if (!isOwner(t, owner)) throw new Rule("Only the traveller", 403);
     if (!(await all("SELECT id FROM requests WHERE trip_id=? AND status='accepted'", t.id)).length) throw new Rule("Accept at least one request first");
-    await run("UPDATE trips SET shop_day=?, status='holds' WHERE id=?", String(day).slice(0, 40), t.id);
+    const ok = await run("UPDATE trips SET shop_day=?, status='holds' WHERE id=? AND status IN ('open','holds')", String(day).slice(0, 40), t.id);
+    if (!ok.changes) throw new Rule("Shopping has already started");
     await log(t.id, null, "trip", "Shopping day set", day);
   }
 
@@ -116,31 +119,44 @@ export function makeTrips(db, pp = paypal) {
   async function finishHold(rid) {
     const r = await request(rid);
     if (!r?.order_id) throw new Rule("No PayPal order", 400);
-    if (r.status === "held" || r.auth_id) return r;
+    if (r.auth_id) return r; // already authorized (a repeated PayPal return)
     const t = await trip(r.trip_id);
-    // Only an accepted ask on a trip still collecting holds may be authorized. Otherwise the approved
-    // order is simply never authorized, so no money is held.
+    // Only an accepted ask on a trip still collecting holds may be authorized. If it's too late,
+    // the approved order is never authorized, so no money is held.
     if (r.status !== "accepted" || t.status !== "holds") throw new Rule("Too late: shopping already started, so nothing was held");
     const a = await pp.authorizeOrder(r.order_id);
-    const won = await run("UPDATE requests SET auth_id=?, status='held', authorized_at=? WHERE id=? AND status='accepted' AND auth_id IS NULL", a.authId, now(), r.id);
-    const t2 = await trip(r.trip_id);
-    if (!won.changes || t2.status !== "holds") {
-      // lost a race with "start shopping": release what PayPal just authorized
-      await pp.voidHold(a.authId).catch(() => {});
-      if (won.changes) await run("UPDATE requests SET status='dropped', auth_id=NULL, authorized_at=NULL WHERE id=?", r.id);
-      await log(t.id, r.id, "paypal", "VOID", `${await nameOf(r.friend_id)} · approved after shopping started, released`);
-      throw new Rule("Too late: shopping already started, so the hold was released");
+    const fname = await nameOf(r.friend_id);
+    const won = await run(`UPDATE requests SET auth_id=?, status='held', authorized_at=? WHERE id=? AND status='accepted' AND auth_id IS NULL
+      AND EXISTS (SELECT 1 FROM trips WHERE id=? AND status='holds')`, a.authId, now(), r.id, t.id);
+    if (won.changes) {
+      await log(t.id, r.id, "paypal", "AUTHORIZE", `${fname} · ${fmt(r.hold, t.currency)} · ${a.status}`);
+      return request(r.id);
     }
-    await log(t.id, r.id, "paypal", "AUTHORIZE", `${await nameOf(r.friend_id)} · ${fmt(r.hold, t.currency)} · ${a.status}`);
-    return request(r.id);
+    const cur = await request(r.id);
+    if (cur.auth_id === a.authId) return cur; // a parallel return attached this same authorization: fine
+    // Shopping started while PayPal was authorizing. Keep the authorization id first, then release it.
+    // If the release fails it stays an open 'void' step, retried from the traveller's trip.
+    await run("UPDATE requests SET status='releasing', auth_id=?, authorized_at=?, plan_op='void', plan_charge=0, plan_why='approved after shopping started' WHERE id=? AND auth_id IS NULL",
+      a.authId, now(), r.id);
+    await log(t.id, r.id, "paypal", "AUTHORIZE", `${fname} · ${fmt(r.hold, t.currency)} · approved after shopping started`);
+    const done = await runPlan(await trip(t.id), r.id);
+    if (done[0]?.error) {
+      await run("UPDATE trips SET status='settling' WHERE id=? AND status='settled'", t.id);
+      throw new Rule(`Too late: shopping already started. PayPal hasn't confirmed the release yet; ${await nameOf(t.owner_id)}'s app will retry it.`);
+    }
+    throw new Rule("Too late: shopping already started. PayPal released the hold, nothing was charged.");
   }
 
   async function startShopping(t, owner) {
     if (!isOwner(t, owner)) throw new Rule("Only the traveller", 403);
     if (!(await all("SELECT id FROM requests WHERE trip_id=? AND status='held'", t.id)).length) throw new Rule("No approved holds yet");
-    await run("UPDATE trips SET status='shopping' WHERE id=?", t.id);
-    // S1: asks without an approved hold are left out. Nothing was held, so nothing is "released".
-    await run("UPDATE requests SET status='dropped' WHERE trip_id=? AND status IN ('asked','accepted')", t.id);
+    // One-way holds -> shopping, in one transaction. S1: asks without an approved hold are left out
+    // ("dropped": nothing was held, so nothing is "released").
+    const [moved] = await db.batch([
+      ["UPDATE trips SET status='shopping' WHERE id=? AND status='holds'", t.id],
+      ["UPDATE requests SET status='dropped' WHERE trip_id=? AND status IN ('asked','accepted') AND EXISTS (SELECT 1 FROM trips WHERE id=? AND status='shopping')", t.id, t.id],
+    ]);
+    if (!moved.changes) throw new Rule("Shopping has already started");
   }
 
   async function mark(t, owner, rid, what, swap) {
@@ -148,17 +164,19 @@ export function makeTrips(db, pp = paypal) {
     const r = await request(rid);
     if (!r || r.trip_id !== t.id) throw new Rule("Unknown request", 404);
     if (!["held", "found", "swap_asked", "not_found", "swapped"].includes(r.status)) throw new Rule("Only held requests can be marked"); // S1
-    if (t.status !== "shopping") throw new Rule("Start shopping first");
-    if (what === "found") await run("UPDATE requests SET status='found', swap_title=NULL, swap_price=NULL WHERE id=?", rid);
-    if (what === "held") await run("UPDATE requests SET status='held', swap_title=NULL, swap_price=NULL WHERE id=?", rid);
-    if (what === "not_found") await run("UPDATE requests SET status='not_found' WHERE id=?", rid);
+    if (t.status !== "shopping" || r.plan_op) throw new Rule("Shopping is over for this trip");
+    // every change re-checks, inside the same statement, that shopping is still on and no step is saved
+    const live = "AND plan_op IS NULL AND EXISTS (SELECT 1 FROM trips WHERE id=? AND status='shopping')";
+    if (what === "found") await run(`UPDATE requests SET status='found', swap_title=NULL, swap_price=NULL WHERE id=? ${live}`, rid, t.id);
+    if (what === "held") await run(`UPDATE requests SET status='held', swap_title=NULL, swap_price=NULL WHERE id=? ${live}`, rid, t.id);
+    if (what === "not_found") await run(`UPDATE requests SET status='not_found' WHERE id=? ${live}`, rid, t.id);
     if (what === "swap") {
       const price = Math.round(swap?.price || 0);
       if (!swap?.title || !(price > 0)) throw new Rule("Swap needs a name and price", 400);
       if (price > r.cap) throw new Rule(`Over ${await nameOf(r.friend_id)}'s max (${fmt(r.cap, t.currency)})`); // S8
       if (r.rule === "skip") throw new Rule(`${await nameOf(r.friend_id)} asked to skip if it's sold out. Mark it Not here.`);
       const auto = r.rule === "similar";
-      await run(`UPDATE requests SET status='${auto ? "swapped" : "swap_asked"}', swap_title=?, swap_price=? WHERE id=?`, swap.title.slice(0, 60), price, rid);
+      await run(`UPDATE requests SET status='${auto ? "swapped" : "swap_asked"}', swap_title=?, swap_price=? WHERE id=? ${live}`, swap.title.slice(0, 60), price, rid, t.id);
       await log(t.id, rid, "trip", auto ? "Swap taken (similar ok)" : "Swap asked", `${swap.title} · ${fmt(price, t.currency)}`);
     }
   }
@@ -166,7 +184,9 @@ export function makeTrips(db, pp = paypal) {
   async function answerSwap(t, friend, rid, yes) {
     const r = await request(rid);
     if (!r || r.friend_id !== friend.id || r.status !== "swap_asked") throw new Rule("No swap to answer");
-    await run("UPDATE requests SET status=? WHERE id=?", yes ? "swapped" : "not_found", rid);
+    const ok = await run(`UPDATE requests SET status=? WHERE id=? AND status='swap_asked' AND plan_op IS NULL
+      AND EXISTS (SELECT 1 FROM trips WHERE id=? AND status='shopping')`, yes ? "swapped" : "not_found", rid, t.id);
+    if (!ok.changes) throw new Rule(`Too late: ${await nameOf(t.owner_id)} already paid at the till, so this one is released`);
     await log(t.id, rid, "trip", yes ? `${friend.name} took the swap` : `${friend.name} skipped the swap`, r.swap_title);
   }
 
@@ -191,18 +211,23 @@ export function makeTrips(db, pp = paypal) {
   // Settlement in two steps. 1) The confirmed plan is saved on each request (capture amount or void),
   // once, while the trip is still shopping. 2) The saved operations run. A retry runs the same saved
   // operations again for the ones PayPal didn't confirm, so a retry can never change who pays what.
-  const OPEN = "('held','found','swap_asked','swapped','not_found')";
+  const OPEN = "('held','found','swap_asked','swapped','not_found','releasing')";
   async function settle(t, owner, plan, receiptId) {
     if (!isOwner(t, owner)) throw new Rule("Only the traveller", 403);
     if (t.status !== "shopping") throw new Rule(t.status === "settling" ? "Payments already started. Use Retry." : "This trip is already settled");
-    // lock the trip first, so a second tap can't save a second plan
-    const lock = await run("UPDATE trips SET status='settling', receipt_id=? WHERE id=? AND status='shopping'", receiptId, t.id);
-    if (!lock.changes) throw new Rule("Payments already started");
+    // One transaction: lock the trip (shopping -> settling, tagged with a fresh settle id) and save every
+    // step. Steps only apply under that settle id, so a failed save leaves nothing, and a second tap
+    // or a stale tab can't save a second plan.
+    const sid = id(12);
+    const tx = [["UPDATE trips SET status='settling', receipt_id=?, settle_id=? WHERE id=? AND status='shopping'", receiptId, sid, t.id]];
     for (const p of plan) {
-      await run(`UPDATE requests SET plan_op=?, plan_charge=?, plan_why=?, line_text=?, price=? WHERE id=? AND status IN ${OPEN}`,
-        p.charge > 0 ? "capture" : "void", p.charge > 0 ? p.charge : 0, p.why || null, p.line?.text || null, p.line?.price ?? null, p.r.id);
+      tx.push([`UPDATE requests SET plan_op=?, plan_charge=?, plan_why=?, line_text=?, price=? WHERE id=? AND trip_id=? AND plan_op IS NULL AND status IN ${OPEN}
+        AND EXISTS (SELECT 1 FROM trips WHERE id=? AND settle_id=?)`,
+        p.charge > 0 ? "capture" : "void", p.charge > 0 ? p.charge : 0, p.why || null, p.line?.text || null, p.line?.price ?? null, p.r.id, t.id, t.id, sid]);
     }
-    await run(`UPDATE requests SET status='dropped' WHERE trip_id=? AND status IN ('asked','accepted')`, t.id);
+    tx.push([`UPDATE requests SET status='dropped' WHERE trip_id=? AND status IN ('asked','accepted') AND EXISTS (SELECT 1 FROM trips WHERE id=? AND settle_id=?)`, t.id, t.id, sid]);
+    const [lock] = await db.batch(tx);
+    if (!lock.changes) throw new Rule("Payments already started");
     if (receiptId) await log(t.id, null, "trip", "Receipt confirmed", receiptId);
     return runPlan(await trip(t.id));
   }
@@ -210,23 +235,26 @@ export function makeTrips(db, pp = paypal) {
   async function retry(t, owner) {
     if (!isOwner(t, owner)) throw new Rule("Only the traveller", 403);
     if (t.status !== "settling") throw new Rule("Nothing to retry");
+    const unplanned = await all(`SELECT id FROM requests WHERE trip_id=? AND status IN ${OPEN} AND auth_id IS NOT NULL AND plan_op IS NULL`, t.id);
+    if (unplanned.length) throw new Rule(`${unplanned.length} item(s) have no saved payment step. Check them in PayPal before retrying.`);
     return runPlan(t);
   }
 
-  async function runPlan(t) {
-    const todo = await all(`SELECT * FROM requests WHERE trip_id=? AND status IN ${OPEN} AND plan_op IS NOT NULL ORDER BY created_at`, t.id);
+  // Runs saved steps that are still open (all of the trip's, or one request's).
+  async function runPlan(t, onlyRid) {
+    const todo = await all(`SELECT * FROM requests WHERE trip_id=? AND status IN ${OPEN} AND plan_op IS NOT NULL${onlyRid ? " AND id=?" : ""} ORDER BY created_at`, ...(onlyRid ? [t.id, onlyRid] : [t.id]));
     const out = [];
     for (const r of todo) {
       const fname = await nameOf(r.friend_id);
       try {
         if (r.plan_op === "capture") {
           const c = await pp.capture(r.auth_id, r.plan_charge, t.currency, `${r.line_text} + jastip fee`); // same idempotency key every try (S7)
-          await run("UPDATE requests SET status='settled', capture_id=?, charged=?, released=?, captured_at=? WHERE id=?", c.captureId, r.plan_charge, r.hold - r.plan_charge, now(), r.id);
+          await run(`UPDATE requests SET status='settled', capture_id=?, charged=?, released=?, captured_at=? WHERE id=? AND status IN ${OPEN}`, c.captureId, r.plan_charge, r.hold - r.plan_charge, now(), r.id);
           await log(t.id, r.id, "paypal", "CAPTURE", `${fname} · ${fmt(r.plan_charge, t.currency)} of ${fmt(r.hold, t.currency)} · ${c.status}`);
           out.push({ id: r.id, charged: r.plan_charge });
         } else {
           await pp.voidHold(r.auth_id);
-          await run("UPDATE requests SET status='released', charged=0, released=? WHERE id=?", r.hold, r.id);
+          await run(`UPDATE requests SET status='released', charged=0, released=? WHERE id=? AND status IN ${OPEN}`, r.hold, r.id);
           await log(t.id, r.id, "paypal", "VOID", `${fname} · ${fmt(r.hold, t.currency)} released · ${r.plan_why || "not bought"}`);
           out.push({ id: r.id, released: r.hold });
         }
@@ -235,8 +263,9 @@ export function makeTrips(db, pp = paypal) {
         out.push({ id: r.id, error: e.message, op: r.plan_op });
       }
     }
+    if (onlyRid) return out;
     const left = await one(`SELECT COUNT(*) AS n FROM requests WHERE trip_id=? AND status IN ${OPEN}`, t.id);
-    if (!left.n) { await run("UPDATE trips SET status='settled' WHERE id=?", t.id); await log(t.id, null, "trip", "Trip settled", ""); }
+    if (!left.n) { const s2 = await run("UPDATE trips SET status='settled' WHERE id=? AND status='settling'", t.id); if (s2.changes) await log(t.id, null, "trip", "Trip settled", ""); }
     return out;
   }
 
@@ -258,9 +287,16 @@ export function makeTrips(db, pp = paypal) {
     await log(t.id, rid, "trip", `${friend.name} got the item`, r.line_text || r.title);
   }
 
+  // Goods value for the duty-free check. Before the receipt: friends' max prices (an upper estimate).
+  // After the receipt is confirmed: the receipt prices of what was bought (fees are not goods).
   async function customs(t) {
-    const rows = await all("SELECT charged, cap FROM requests WHERE trip_id=? AND status NOT IN ('declined','released','asked','dropped','accepted')", t.id);
-    return { usd: Math.round(rows.reduce((s, x) => s + usd(x.charged ?? x.cap, t.currency), 0)), limit: CUSTOMS_USD };
+    const rows = await all("SELECT status, cap, price, plan_op FROM requests WHERE trip_id=? AND status NOT IN ('declined','asked','dropped','accepted','releasing')", t.id);
+    const fromReceipt = ["settling", "settled"].includes(t.status);
+    const goods = rows.reduce((s, x) => {
+      if (fromReceipt) return s + (x.plan_op === "capture" || ["settled", "delivered"].includes(x.status) ? x.price || 0 : 0);
+      return s + (x.status === "not_found" || x.status === "released" ? 0 : x.cap);
+    }, 0);
+    return { usd: Math.round(usd(goods, t.currency)), limit: CUSTOMS_USD, basis: fromReceipt ? "receipt" : "max" };
   }
 
   async function canSee(t, viewer) {
@@ -291,8 +327,8 @@ export function makeTrips(db, pp = paypal) {
   }
 
   async function summary(t, friendId) {
-    const rs = await all(`SELECT status, hold, charged, released, cap FROM requests WHERE trip_id=?${friendId ? " AND friend_id=?" : ""}`, ...(friendId ? [t.id, friendId] : [t.id]));
-    const held = rs.filter((r) => ["held", "found", "swap_asked", "swapped", "not_found"].includes(r.status)).reduce((s2, r) => s2 + (r.hold || 0), 0);
+    const rs = await all(`SELECT status, hold, charged, released, cap, plan_op FROM requests WHERE trip_id=?${friendId ? " AND friend_id=?" : ""}`, ...(friendId ? [t.id, friendId] : [t.id]));
+    const held = rs.filter((r) => ["held", "found", "swap_asked", "swapped", "not_found", "releasing"].includes(r.status)).reduce((s2, r) => s2 + (r.hold || 0), 0);
     const charged = rs.reduce((s2, r) => s2 + (r.charged || 0), 0);
     const waiting = rs.filter((r) => r.status === "asked").length;
     const toHold = rs.filter((r) => r.status === "accepted").length;
@@ -300,7 +336,8 @@ export function makeTrips(db, pp = paypal) {
     const toConfirm = rs.filter((r) => r.status === "settled").length;
     const out = rs.filter((r) => ["dropped", "declined"].includes(r.status)).length;
     const released = rs.filter((r) => r.status === "released").length;
-    return { count: rs.length, held, charged, waiting, toHold, swaps, toConfirm, out, released };
+    const pending = rs.filter((r) => r.plan_op && ["held", "found", "swap_asked", "swapped", "not_found", "releasing"].includes(r.status)).length;
+    return { count: rs.length, held, charged, waiting, toHold, swaps: t.status === "shopping" ? swaps : 0, toConfirm, out, released, pending };
   }
 
   async function tripsFor(u) {

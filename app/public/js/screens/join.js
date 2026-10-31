@@ -1,12 +1,12 @@
 // Friend opens the traveller's link and asks for an item. Works without an account: a name is enough.
 import { api, ic, esc, av, toast, busy, pic, cat, dateRange } from "../ui.js";
-import { topbar, store, refreshMe } from "../app.js";
+import { topbar, store, refreshMe, owns } from "../app.js";
 import { sceneHTML, skyOf } from "../scenes.js";
 import { fmt, toMinor, step, CUR } from "../money.js";
 
-export async function joinView(app, code) {
+export async function joinView(app, code, route) {
   let info;
-  try { info = await api(`/api/join/${code}`); }
+  try { info = await api(`/api/join/${code}`); if (route != null && !owns(route)) return; }
   catch (e) { app.innerHTML = `${topbar()}<main class="page"><div class="empty card"><b>This link doesn't work</b><span>${esc(e.message)}. Ask your friend for a new one.</span><a class="btn dark" href="#/" style="max-width:240px">Go home</a></div></main>`; return; }
   const { trip: t, owner } = info;
   const unit = step(t.currency), dec = CUR[t.currency].d;

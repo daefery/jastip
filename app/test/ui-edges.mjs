@@ -111,6 +111,16 @@ const after = await dina.p.evaluate(() => [location.hash, !!document.querySelect
 ok(after[0] === "#/" && !after[1], "slow settle + leaving: home stays home", JSON.stringify(after));
 await dina.p.unroute("**/api/trips/*/settle");
 
+// 23. slow /api/me on the way to a trip, then go home: the trip never paints over home
+await dina.p.goto(`/#/`); await dina.p.waitForTimeout(500);
+let slowOnce = true;
+await dina.p.route("**/api/me", async (route) => { if (slowOnce) { slowOnce = false; await new Promise((r) => setTimeout(r, 2500)); } await route.continue(); });
+await dina.p.evaluate((id) => { location.hash = `#/trip/${id}`; }, trip.id); await dina.p.waitForTimeout(200);
+await dina.p.evaluate(() => { location.hash = "#/"; }); await dina.p.waitForTimeout(5000);
+const after2 = await dina.p.evaluate(() => [location.hash, !!document.querySelector(".trk")]);
+ok(after2[0] === "#/" && !after2[1], "slow route fetch + leaving: the old trip never paints", JSON.stringify(after2));
+await dina.p.unroute("**/api/me");
+
 // 3. a stranger cannot open the trip
 const zed = await person("Zed");
 ok((await zed.call(`/api/trips/${trip.id}`)).status === 404, "stranger gets 404 on the trip");

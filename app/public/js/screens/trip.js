@@ -9,15 +9,16 @@ import { receiptFlow } from "./receipt.js";
 const STEPS = ["Asked", "Held", "Shopping", "Paid", "Delivered"];
 let token = 0, poll;
 
-export async function tripView(app, tid, { rid, params }) {
-  const my = ++token, route = store.route;
+export async function tripView(app, tid, { rid, params, route = store.route }) {
+  const my = ++token;
+  if (!owns(route)) return;
   const v = await api(`/api/trips/${tid}`);
   if (my !== token || !owns(route)) return;
   if (params.get("held")) toast("Hold approved. ¥0 charged.".replace("¥", v.trip.currency === "JPY" ? "¥" : ""));
   if (params.get("holdfail")) toast(params.get("why") || "PayPal didn't approve the hold", "err");
   if ([...params.keys()].length) history.replaceState(null, "", `#/trip/${tid}${rid ? `/r/${rid}` : ""}`);
   // reload only while this route still owns the page; errors become a toast, never an unhandled rejection
-  const reload = () => owns(route) ? tripView(app, tid, { rid, params: new URLSearchParams() }).catch((e) => owns(route) && toast(e.message, "err")) : Promise.resolve();
+  const reload = () => owns(route) ? tripView(app, tid, { rid, params: new URLSearchParams(), route }).catch((e) => owns(route) && toast(e.message, "err")) : Promise.resolve();
   const ctx = { app, v, cur: v.trip.currency, reload };
   if (v.mine) courier(ctx, params.get("share") === "1");
   else order(ctx, rid);
@@ -35,6 +36,7 @@ const titleOf = (r) => (r.swap_title && ["swapped", "settled", "delivered"].incl
 /* ---------------- friend: the order ---------------- */
 function stageOf(r, t) {
   if (r.status === "delivered") return 5;
+  if (r.plan_op) return 3;
   if (r.status === "dropped" || r.status === "declined") return 0;
   if (r.status === "settled" || r.status === "released" || (t.status === "settled" && r.status === "not_found")) return 3;
   if (t.status === "shopping" || ["found", "swap_asked", "swapped", "not_found"].includes(r.status)) return 2;
@@ -45,6 +47,13 @@ function stageOf(r, t) {
 function friendState(r, t, owner) {
   const o = esc(owner.name), cur = t.currency, hold = r.hold || r.hold_needed;
   const S = { scene: "asked", eta: dateRange(t), title: "", sub: "", act: "", needs: "", money: null };
+  const unconfirmed = r.plan_op && ["held", "found", "swap_asked", "swapped", "not_found", "releasing"].includes(r.status);
+  if (unconfirmed && r.plan_op === "capture") return Object.assign(S, { scene: "paid", eta: "Paying", title: `Charging ${fmt(r.plan_charge, cur)}`,
+    sub: `The receipt line plus ${o}'s fee. PayPal hasn't confirmed it yet, so this may take a moment. It never goes above your ${fmt(hold, cur)} hold.`,
+    money: { value: r.plan_charge, note: `being charged · ${fmt(hold - r.plan_charge, cur)} will be released`, fill: Math.round((r.plan_charge / hold) * 100), color: "#9be2bd", rest: true } });
+  if (unconfirmed) return Object.assign(S, { scene: "released", eta: "Releasing", title: r.status === "releasing" ? "Approved too late" : "Not bought. Releasing your hold.",
+    sub: `${r.status === "releasing" ? `${o} had already started shopping. ` : ""}Nothing will be charged. PayPal hasn't confirmed the release yet; it's retried automatically.`,
+    money: { value: 0, note: `${fmt(hold, cur)} being released`, fill: 100, color: "#c7c7cc" } });
   switch (r.status) {
     case "asked": Object.assign(S, { title: `Waiting for ${o}`, sub: `${o} checks your max price before anyone holds money.`, act: `<button class="btn red" data-withdraw>${ic("trash")}Withdraw ask</button>` }); break;
     case "declined": Object.assign(S, { title: `${o} can't take this one`, sub: "Nothing was held or charged.", scene: "released" }); break;
@@ -60,6 +69,7 @@ function friendState(r, t, owner) {
         money: { value: hold, note: `held · ${fmt(0, cur)} charged`, fill: 100 } });
       break;
     case "swap_asked":
+      if (t.status !== "shopping") break;
       Object.assign(S, { scene: "shopping", eta: "Shopping now", title: `${esc(r.title)} is sold out`, sub: `${o} found ${esc(r.swap_title)} for ${fmt(r.swap_price, cur)}. Take it or skip?`, needs: `${o} is waiting in the shop`,
         act: `<button class="btn dark" data-swap>${ic("swap")}Choose</button>`, money: { value: hold, note: `held · ${fmt(0, cur)} charged`, fill: 100 } });
       break;
@@ -136,7 +146,8 @@ function order({ app, v, cur, reload }, rid) {
 }
 
 function statusWord(r, t) {
-  return { asked: "Waiting for OK", declined: "Declined", dropped: "Not included", accepted: t.status === "holds" ? "Approve hold" : "Accepted", held: "Held", found: "In the basket", swap_asked: "Pick a swap", swapped: "Swap in basket", not_found: "Not found", settled: "Paid", released: "Released", delivered: "Delivered" }[r.status] || r.status;
+  if (r.plan_op && !["settled", "released", "delivered"].includes(r.status)) return r.plan_op === "capture" ? "Paying…" : "Releasing…";
+  return { asked: "Waiting for OK", declined: "Declined", dropped: "Not included", releasing: "Releasing…", accepted: t.status === "holds" ? "Approve hold" : "Accepted", held: "Held", found: "In the basket", swap_asked: "Pick a swap", swapped: "Swap in basket", not_found: "Not found", settled: "Paid", released: "Released", delivered: "Delivered" }[r.status] || r.status;
 }
 function dotOf(r, t) {
   return { settled: "#05a357", delivered: "#05a357", released: "#a8a8a8", declined: "#a8a8a8", swap_asked: "#ff7a00", held: "#276ef1", found: "#ff7a00", swapped: "#ff7a00", accepted: t.status === "holds" ? "#ff7a00" : "#a8a8a8" }[r.status] || "#a8a8a8";
@@ -217,7 +228,7 @@ function courier({ app, v, cur, reload }, openShare) {
     action = `<button class="btn dark" data-shop ${held.length ? "" : "disabled"}>${ic("bag")}Start shopping${held.length ? ` · ${held.length}` : ""}</button>`;
   } else if (t.status === "settling") {
     n = 3; scene = "paid"; eta = "Payment problem";
-    const stuck = by("held", "found", "swap_asked", "swapped", "not_found");
+    const stuck = by("held", "found", "swap_asked", "swapped", "not_found", "releasing");
     title = `${stuck.length} PayPal step${stuck.length === 1 ? "" : "s"} didn't go through`;
     sub = "PayPal didn't confirm these. The holds are still in place. Retry, nothing is charged twice.";
     action = `<button class="btn dark" data-retry>${ic("lock")}Retry failed payments</button>`;
@@ -250,7 +261,7 @@ function courier({ app, v, cur, reload }, openShare) {
       + group("Still looking", by("held"), (r) => `<div class="tbtn-row"><button class="tbtn" data-more="${r.id}" aria-label="More for ${esc(r.title)}">${ic("more")}</button><button class="tbtn blue" data-mark="${r.id}" data-w="found" aria-label="Found ${esc(r.title)}">${ic("check")}<span class="lbl">Found</span></button></div>`)
       + group("Not here", by("not_found"), (r) => `<button class="tbtn x" data-mark="${r.id}" data-w="held">Undo</button>`);
   } else if (t.status === "settling") {
-    body = group("Not confirmed yet", by("held", "found", "swap_asked", "swapped", "not_found"), (r) => `<span class="rt num" style="color:var(--red)">${r.plan_op === "capture" ? fmt(r.plan_charge, cur) : fmt(0, cur)}<small>${r.plan_op === "capture" ? "to charge" : `release ${fmt(r.hold, cur)}`} · held</small></span>`)
+    body = group("Not confirmed yet", by("held", "found", "swap_asked", "swapped", "not_found", "releasing"), (r) => `<span class="rt num" style="color:var(--red)">${r.plan_op === "capture" ? fmt(r.plan_charge, cur) : fmt(0, cur)}<small>${r.plan_op === "capture" ? "to charge" : `release ${fmt(r.hold, cur)}`} · held</small></span>`)
       + group("Done", [...paid, ...rel], (r) => `<span class="rt num" style="color:${r.charged ? "var(--green)" : "var(--l2)"}">${fmt(r.charged || 0, cur)}<small>${r.charged ? "charged" : "released"}</small></span>`);
   } else {
     body = group("Paid", paid, (r) => `<span class="rt num" style="color:var(--green)">${fmt(r.charged, cur)}<small>${r.status === "delivered" ? "delivered" : "to hand over"}</small></span>`)
@@ -280,7 +291,7 @@ function courier({ app, v, cur, reload }, openShare) {
       <h3>Friends</h3>${friends.map((f) => { const xs = rs.filter((r) => r.friend.id === f.id); const p = xs.reduce((s, r) => s + (r.charged || 0), 0), h = holdSum(xs.filter((r) => ["held", "found", "swap_asked", "swapped", "not_found"].includes(r.status))); return `<div class="ord">${av(f, 40)}<div><b>${esc(f.name)}</b><span>${xs.length} item${xs.length > 1 ? "s" : ""} · ${p ? fmt(p, cur) + " paid" : h ? fmt(h, cur) + " held" : "asked"}</span></div></div>`; }).join("") || `<p class="hint">No asks yet.</p>`}
       <div style="height:8px"></div><button class="btn light sm" data-share style="width:100%">${ic("share")}Share trip link</button>
     </div></nav>
-    <aside class="aside" aria-label="Money"><div class="card"><h3>Money · PayPal</h3>${kpis}${v.customs?.usd ? `<p class="hint" style="margin-top:8px">${ic("scale")} Customs: $${v.customs.usd} of $${v.customs.limit} duty-free</p>` : ""}</div>
+    <aside class="aside" aria-label="Money"><div class="card"><h3>Money · PayPal</h3>${kpis}${v.customs?.usd ? `<p class="hint" style="margin-top:8px">${ic("scale")} Customs: ${v.customs.basis === "receipt" ? "goods" : "up to"} $${v.customs.usd} of $${v.customs.limit} duty-free${v.customs.basis === "receipt" ? " (receipt prices)" : " (friends' max prices)"}</p>` : ""}</div>
       <div class="card"><h3>PayPal &amp; AI activity</h3>${activity}</div></aside>
   </main>`;
 

@@ -1,0 +1,1 @@
+ALTER TABLE trips ADD COLUMN settle_id TEXT;
