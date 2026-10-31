@@ -1,7 +1,7 @@
 // Shell + router. Routes: / (welcome or trips), #/new, #/trip/:id, #/trip/:id/r/:rid, #/join/:code, #/me
 import { api, ic, esc, av, toast, sheet, pic, closeAllSheets } from "./ui.js";
 import { fmt } from "./money.js";
-import { SCENES, sceneHTML } from "./scenes.js";
+import { artHTML } from "./scenes.js";
 import { tripView } from "./screens/trip.js";
 import { joinView } from "./screens/join.js";
 import { newTripView } from "./screens/new.js";
@@ -29,7 +29,7 @@ export function topbar({ back, title } = {}) {
 
 function welcome(next) {
   app.innerHTML = `${topbar()}<main class="hello"><div class="box">
-    <svg class="art" viewBox="0 0 250 190" aria-hidden="true">${SCENES.open.svg}</svg>
+    ${artHTML("open")}
     <h1>Shop abroad for friends.</h1>
     <p>No one pays before you buy.</p>
     <div class="feats">
@@ -98,7 +98,7 @@ function home() {
       <div><h1 class="h1">Trips</h1><p class="lead" style="margin:0">${trips.length ? "Your trips and the ones you asked from." : ""}</p></div>
       <a class="btn dark sm" href="#/new" style="height:44px">${ic("plus")}New trip</a></div>
     ${trips.length ? `<div class="sec-t"><span>Active</span></div><div class="home">${trips.map(row).join("")}</div>` : `
-      <div class="empty card" style="margin-top:18px"><svg class="art" viewBox="0 0 250 190" aria-hidden="true">${SCENES.open.svg}</svg><b>Going somewhere?</b>
+      <div class="empty card" style="margin-top:18px">${artHTML("flying")}<b>Going somewhere?</b>
         <span>Open a trip and share the link in your group chat. Friends ask, PayPal holds, you shop.</span>
         <a class="btn dark" href="#/new" style="max-width:280px">${ic("plus")}Open a trip</a></div>`}
   </main>`;

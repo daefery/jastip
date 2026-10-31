@@ -73,15 +73,19 @@ a{color:inherit;text-decoration:none}
 .st.gray{background:var(--soft);color:var(--l2)}.st.blue{background:var(--blue-soft);color:var(--blue)}.st.orange{background:var(--orange-soft);color:#b85500}.st.green{background:var(--green-soft);color:var(--green)}.st.red{background:var(--red-soft);color:var(--red)}
 .amt{font-weight:700;font-size:15px}
 .empty{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding:40px 20px}
-.empty .art{width:120px;height:120px}
+.empty .art{width:180px;height:auto;border-radius:20px}
 .empty b{font-size:20px;letter-spacing:-.4px}
 .empty span{color:var(--l2);max-width:320px}
 
 /* ---------- tracker (the order page) ---------- */
 .trk{display:grid;grid-template-columns:minmax(0,1fr);gap:0;max-width:1320px;margin:0 auto}
 .scene{position:relative;height:clamp(180px,30dvh,250px);overflow:hidden;background:var(--sky,linear-gradient(180deg,#eaf1ff,#fff))}
-.scene .illo{position:absolute;inset:0;display:grid;place-items:center;padding-top:8px}
-.scene .illo svg{width:min(240px,60vw);height:auto;overflow:visible}
+.scene .illo{position:absolute;inset:0}
+/* The art's own background is the scene colour, so it can fill the scene: the subject sits in the middle
+   band, and the empty edges fall under the floating buttons and the sheet. */
+.scene .illo img{width:100%;height:100%;object-fit:cover;object-position:50% 46%;display:block;animation:sceneIn .5s cubic-bezier(.2,.8,.2,1) both}
+@keyframes sceneIn{from{opacity:0;transform:translateY(10px) scale(.97)}}
+@media (prefers-reduced-motion:reduce){.scene .illo img{animation:none}}
 .scene .tb{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:flex-end;z-index:2}
 .scene .tb .rb{display:none}
 .rb{width:44px;height:44px;border-radius:99px;background:#fff;display:grid;place-items:center;box-shadow:0 2px 10px rgba(0,0,0,.12)}
@@ -243,7 +247,7 @@ input[type=date].input{padding:0 10px;font-size:16px}
 /* welcome */
 .hello{min-height:calc(100dvh - var(--top));display:grid;place-items:center;padding:24px 20px 40px}
 .hello .box{width:100%;max-width:420px}
-.hello .art{width:100%;max-width:300px;margin:0 auto 6px;display:block}
+.hello .art{width:100%;max-width:340px;height:auto;margin:0 auto 6px;display:block;border-radius:24px}
 .hello h1{font-size:34px;line-height:1.08;letter-spacing:-1px;text-align:center;margin:0 0 8px}
 .hello p{text-align:center;color:var(--l2);margin:0 0 22px}
 .feats{display:grid;gap:10px;margin-bottom:22px}
@@ -352,7 +356,7 @@ input[type=date].input{padding:0 10px;font-size:16px}
 @media (min-width:1100px){.pick-asks{display:none}}
 .actbar .btn.light{height:46px;font-size:15px}
 /* shopping mode on phones: smaller scene so the list gets the room */
-@media (max-width:699px){.trk.shop>.scene{height:clamp(120px,18dvh,170px)}}
+@media (max-width:699px){.trk.shop>.scene{height:clamp(150px,22dvh,190px)}.trk.shop>.scene .illo img{object-position:50% 42%}}
 .ferr{display:block;font-style:normal;font-size:13px;color:var(--red);min-height:0;margin-top:4px}
 .ferr:empty{display:none}
 .input[aria-invalid="true"]{box-shadow:inset 0 0 0 2px var(--red)}

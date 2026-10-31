@@ -19,7 +19,7 @@ const handle = makeApi(db, {
   saveImage: async (rid, dataUrl) => { const f = join(UPLOADS, `${rid}.img`); await writeFile(f, Buffer.from(dataUrl.split(",")[1], "base64")); return f; },
 });
 const PORT = Number(env("PORT") || 5180);
-const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".webmanifest": "application/manifest+json" };
+const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".webmanifest": "application/manifest+json" };
 
 createServer(async (req, res) => {
   const chunks = []; for await (const c of req) chunks.push(c);
