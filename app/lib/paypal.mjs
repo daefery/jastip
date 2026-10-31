@@ -57,7 +57,7 @@ export async function createHold({ requestId, amount, cur, title, travellerName,
   const body = await call("POST", "/v2/checkout/orders", {
     intent: "AUTHORIZE",
     purchase_units: [unit],
-    payment_source: { paypal: { experience_context: { user_action: "CONTINUE", shipping_preference: "NO_SHIPPING", brand_name: "Jastip", return_url: returnUrl, cancel_url: cancelUrl } } },
+    payment_source: { paypal: { experience_context: { user_action: "CONTINUE", shipping_preference: "NO_SHIPPING", brand_name: "Jastip", return_url: returnUrl, cancel_url: cancelUrl, ...(env("PAYPAL_LOCALE") ? { locale: env("PAYPAL_LOCALE") } : {}) } } },
   }, `hold-${requestId}`);
   const approve = (body.links || []).find((l) => l.rel === "payer-action" || l.rel === "approve")?.href;
   return { orderId: body.id, approve };
