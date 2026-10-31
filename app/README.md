@@ -99,7 +99,7 @@ and real sign-in (names only; the cookie is a random session token, so it can't 
 
 ## Tests
 
-Last full runs, 30 Oct 2026, real PayPal sandbox + real AI (`npm test`): **29/29 passed** locally,
+Last full runs, 31 Oct 2026, real PayPal sandbox + real AI (`npm test`): **29/29 passed** locally,
 and **29/29 passed** on the live Cloudflare deployment (`BASE=https://jastip.feryyp-work.workers.dev npm test`).
 Checked afterwards directly against PayPal's API (not our database):
 
