@@ -1,6 +1,6 @@
 // Vision + text AI. Two providers, same OpenAI-style chat format:
 //  - Cloudflare Workers AI (default when deployed): env.AI binding, model @cf/google/gemma-4-26b-a4b-it,
-//    thinking off and JSON output on (about 10 s per receipt, 19-20/20 on the synthetic set, 30 Oct 2026).
+//    thinking off (about 7-21 s per receipt; 19-20/20 on the synthetic set, real photos tested 31 Oct 2026).
 //  - Any OpenAI-compatible endpoint (local dev): AI_BASE_URL + AI_API_KEY + AI_MODEL.
 // The model only reads (receipt lines, which line answers which request, what a link is).
 // Code does every money step: discounts fold into the item above, shares, caps, captures.
@@ -12,34 +12,48 @@ const binding = () => globalThis.__JASTIP_AI__; // set by the Worker entry
 export const aiReady = () => Boolean(binding() || env("AI_API_KEY"));
 export const aiName = () => (binding() && !env("AI_API_KEY") ? CF_MODEL : model());
 
-async function once(messages) {
+async function once(messages, temperature = 0) {
   const isCf = binding() && !env("AI_API_KEY");
   const m = isCf ? CF_MODEL : model();
-  const gemmaOpts = m.startsWith("@cf/") ? { chat_template_kwargs: { enable_thinking: false }, response_format: { type: "json_object" }, max_completion_tokens: 2500 } : {};
+  // No response_format json_object for Gemma: on a real receipt photo (31 Oct 2026) it made the model
+  // emit whitespace until the token limit, 3 of 3 times. Plain output + the brace slice below parsed 4 of 4.
+  const gemmaOpts = m.startsWith("@cf/") ? { chat_template_kwargs: { enable_thinking: false }, max_completion_tokens: 2500 } : {};
   let text;
   if (isCf) {
-    const out = await binding().run(m, { messages, temperature: 0, ...gemmaOpts });
+    const out = await binding().run(m, { messages, temperature, ...gemmaOpts });
     text = out?.choices?.[0]?.message?.content ?? out?.response ?? "";
     if (typeof text !== "string") text = JSON.stringify(text);
   } else {
     const res = await fetch(`${env("AI_BASE_URL") || "http://127.0.0.1:8317/v1"}/chat/completions`, {
       method: "POST",
       headers: { Authorization: `Bearer ${env("AI_API_KEY")}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: m, temperature: 0, messages, ...gemmaOpts }),
+      body: JSON.stringify({ model: m, temperature, messages, ...gemmaOpts }),
       signal: AbortSignal.timeout(60000),
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(`AI ${res.status}: ${JSON.stringify(body).slice(0, 200)}`);
     text = body.choices?.[0]?.message?.content || "";
   }
-  const json = text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
-  return { data: JSON.parse(json), model: m };
+  const json = text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1).replace(/,\s*([\]}])/g, "$1");
+  try { return { data: JSON.parse(json), model: m }; }
+  catch (e) { e.message += ` · raw ${text.length} chars: ${text.slice(Math.max(0, 300), 420).replace(/\s+/g, " ")}`; throw e; }
 }
 
-// One retry: Workers AI returns an occasional 500, and a model can emit one bad JSON.
-async function chat(messages) {
-  try { return await once(messages); }
-  catch (e) { await new Promise((r) => setTimeout(r, 400)); return await once(messages); }
+// Retries: Workers AI returns an occasional 500, and Gemma emits broken JSON on some real receipt
+// photos (2 of 4 live reads, 31 Oct 2026). A retry nudges temperature so it isn't the same output again.
+// Quota errors (4006 daily allocation) are not retried: they won't clear in seconds.
+export class AiBusy extends Error {}
+async function chat(messages, tries = 3) {
+  let last;
+  for (let i = 0; i < tries; i++) {
+    try { return await once(messages, i ? 0.2 : 0); }
+    catch (e) {
+      last = e;
+      if (/4006|daily free allocation|neurons/i.test(e.message)) throw new AiBusy(e.message);
+      await new Promise((r) => setTimeout(r, 300));
+    }
+  }
+  throw last;
 }
 
 const RECEIPT_SYSTEM = `You read one shop receipt for a jastip app: a traveller bought items for friends and paid with one receipt.
@@ -64,14 +78,22 @@ export async function readReceipt(imageDataUrl, requests) {
   return { ...data, model: m };
 }
 
-// Code, not the model: negative lines belong to the item line above.
+// Lines that are never a bought item, whatever the model says: totals, tax, payment, change, points.
+const NOT_ITEM = /合計|小計|現計|総計|お釣|釣銭|お預|預り|預かり|内税|外税|消費税|税率|対象|現金|クレジット|ポイント|TOTAL|SUBTOTAL|SUB-TOTAL|CHANGE|CASH|TAX|VAT|PPN|KEMBALI|TUNAI|BAYAR/i;
+
+// Code, not the model, shapes the lines that money is computed from:
+//  - total/tax/payment/change lines are dropped,
+//  - zero-price lines (quantity notes like "3点 X ¥485") are dropped,
+//  - a negative line (coupon, 値引) folds into the nearest item line above it.
 export function foldDiscounts(lines) {
   const out = [];
   for (const l of lines || []) {
-    if (l.price < 0 && out.length) { out[out.length - 1].price += l.price; out[out.length - 1].disc = true; }
-    else out.push({ ...l });
+    const price = Number(l.price);
+    if (!Number.isFinite(price) || price === 0 || NOT_ITEM.test(String(l.text || ""))) continue;
+    if (price < 0) { const item = out[out.length - 1]; if (item) { item.price += price; item.disc = true; } continue; }
+    out.push({ ...l, price });
   }
-  return out;
+  return out.filter((l) => l.price > 0);
 }
 
 const LINK_SYSTEM = `A friend wants something bought abroad. From their message (a link, a product name, or slang), return JSON only:

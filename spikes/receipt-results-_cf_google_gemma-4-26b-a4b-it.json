@@ -1,12 +1,12 @@
 {
   "model": "@cf/google/gemma-4-26b-a4b-it",
-  "right": 17,
+  "right": 19,
   "total": 20,
   "results": [
     {
       "case": "s1-donki-tax-incl.json",
       "model": "@cf/google/gemma-4-26b-a4b-it",
-      "ms": 65796,
+      "ms": 15734,
       "rows": [
         {
           "id": "r1",
@@ -36,17 +36,17 @@
           "line": "ハダラボ 極潤 ヒアルロン液 170ml",
           "share": 968,
           "ok": true,
-          "why": "Matches Hada Labo lotion 170ml"
+          "why": "Matches Hada Labo Gokujyun 170ml"
         },
         {
           "id": "r4",
           "want": "Roihi-tsuboko patches 156",
           "expected": 1078,
           "got": 1078,
-          "line": "ロイヒ ツボコ 156枚",
+          "line": "ロイヒツボコ 156枚",
           "share": 1078,
           "ok": true,
-          "why": "Matches Roihi-tsuboko 156"
+          "why": "Matches Roihi-tsuboko 156 patches"
         },
         {
           "id": "r5",
@@ -56,7 +56,7 @@
           "line": null,
           "share": null,
           "ok": true,
-          "why": "No Pocky strawberry found"
+          "why": "Pocky strawberry not found"
         }
       ],
       "read": {
@@ -82,7 +82,7 @@
           },
           {
             "n": 4,
-            "text": "ロイヒ ツボコ 156枚",
+            "text": "ロイヒツボコ 156枚",
             "qty": 1,
             "price": 1078
           },
@@ -116,19 +116,19 @@
             "request_id": "r3",
             "line_n": 3,
             "confidence": 1,
-            "why": "Matches Hada Labo lotion 170ml"
+            "why": "Matches Hada Labo Gokujyun 170ml"
           },
           {
             "request_id": "r4",
             "line_n": 4,
             "confidence": 1,
-            "why": "Matches Roihi-tsuboko 156"
+            "why": "Matches Roihi-tsuboko 156 patches"
           },
           {
             "request_id": "r5",
             "line_n": null,
             "confidence": 0,
-            "why": "No Pocky strawberry found"
+            "why": "Pocky strawberry not found"
           }
         ],
         "rawLines": [
@@ -152,7 +152,7 @@
           },
           {
             "n": 4,
-            "text": "ロイヒ ツボコ 156枚",
+            "text": "ロイヒツボコ 156枚",
             "qty": 1,
             "price": 1078
           },
@@ -168,7 +168,7 @@
     {
       "case": "s2-drugstore-discount.json",
       "model": "@cf/google/gemma-4-26b-a4b-it",
-      "ms": 38268,
+      "ms": 12518,
       "rows": [
         {
           "id": "r1",
@@ -178,7 +178,7 @@
           "line": "ビオレUV アクアリッチ エッセンス 70g",
           "share": 970,
           "ok": true,
-          "why": "Matches Biore UV Aqua Rich sunscreen"
+          "why": "Matches Biore UV Aqua Rich"
         },
         {
           "id": "r2",
@@ -208,7 +208,7 @@
           "line": null,
           "share": null,
           "ok": true,
-          "why": "Muhi itch cream not found"
+          "why": "No Muhi itch cream found; line 5 is Ibuprofen"
         }
       ],
       "read": {
@@ -253,7 +253,7 @@
             "request_id": "r1",
             "line_n": 1,
             "confidence": 1,
-            "why": "Matches Biore UV Aqua Rich sunscreen"
+            "why": "Matches Biore UV Aqua Rich"
           },
           {
             "request_id": "r2",
@@ -271,7 +271,7 @@
             "request_id": "r4",
             "line_n": null,
             "confidence": 0,
-            "why": "Muhi itch cream not found"
+            "why": "No Muhi itch cream found; line 5 is Ibuprofen"
           }
         ],
         "rawLines": [
@@ -311,17 +311,17 @@
     {
       "case": "s3-daiso-decoys.json",
       "model": "@cf/google/gemma-4-26b-a4b-it",
-      "ms": 27623,
+      "ms": 14086,
       "rows": [
         {
           "id": "r1",
           "want": "makeup brush set",
           "expected": 220,
           "got": 220,
-          "line": "メイクアップ ブラシ セット",
+          "line": "メイクブラシ セット",
           "share": 220,
           "ok": true,
-          "why": "Matches 'makeup brush set'"
+          "why": "メイクブラシ セット is makeup brush set"
         },
         {
           "id": "r2",
@@ -331,7 +331,7 @@
           "line": "メイクスポンジ 6P",
           "share": 110,
           "ok": true,
-          "why": "Matches 'makeup sponges'"
+          "why": "メイクスポンジ is makeup sponge"
         },
         {
           "id": "r3",
@@ -341,17 +341,17 @@
           "line": "ブラシクリーナー",
           "share": 330,
           "ok": true,
-          "why": "Matches 'brush cleaner'"
+          "why": "ブラシクリーナー is brush cleaner"
         },
         {
           "id": "r4",
           "want": "silicone food container",
           "expected": null,
-          "got": null,
-          "line": null,
-          "share": null,
-          "ok": true,
-          "why": "Strainer is not a container"
+          "got": 110,
+          "line": "シリコン ストレーナー",
+          "share": 110,
+          "ok": false,
+          "why": "シリコン ストレーナー translates to silicone strainer/container"
         }
       ],
       "read": {
@@ -365,7 +365,7 @@
           },
           {
             "n": 2,
-            "text": "メイクアップ ブラシ セット",
+            "text": "メイクブラシ セット",
             "qty": 1,
             "price": 220
           },
@@ -396,28 +396,28 @@
         "tax_free": false,
         "matches": [
           {
+            "request_id": "r4",
+            "line_n": 1,
+            "confidence": 0.9,
+            "why": "シリコン ストレーナー translates to silicone strainer/container"
+          },
+          {
             "request_id": "r1",
             "line_n": 2,
             "confidence": 1,
-            "why": "Matches 'makeup brush set'"
+            "why": "メイクブラシ セット is makeup brush set"
           },
           {
             "request_id": "r2",
             "line_n": 3,
             "confidence": 1,
-            "why": "Matches 'makeup sponges'"
+            "why": "メイクスポンジ is makeup sponge"
           },
           {
             "request_id": "r3",
             "line_n": 4,
             "confidence": 1,
-            "why": "Matches 'brush cleaner'"
-          },
-          {
-            "request_id": "r4",
-            "line_n": null,
-            "confidence": 0,
-            "why": "Strainer is not a container"
+            "why": "ブラシクリーナー is brush cleaner"
           }
         ],
         "rawLines": [
@@ -429,7 +429,7 @@
           },
           {
             "n": 2,
-            "text": "メイクアップ ブラシ セット",
+            "text": "メイクブラシ セット",
             "qty": 1,
             "price": 220
           },
@@ -456,12 +456,114 @@
     },
     {
       "case": "s4-konbini-tax-excl.json",
-      "err": "TypeError: fetch failed"
+      "model": "@cf/google/gemma-4-26b-a4b-it",
+      "ms": 6465,
+      "rows": [
+        {
+          "id": "r1",
+          "want": "Royce nama chocolate original",
+          "expected": 800,
+          "got": 800,
+          "line": "ロイズ 生チョコレート オーレ",
+          "share": 800,
+          "ok": true,
+          "why": "Matches Royce Nama Chocolate"
+        },
+        {
+          "id": "r2",
+          "want": "Shiroi Koibito 12",
+          "expected": 1100,
+          "got": 1100,
+          "line": "白い恋人 12枚",
+          "share": 1100,
+          "ok": true,
+          "why": "Matches Shiroi Koibito 12 pieces"
+        },
+        {
+          "id": "r3",
+          "want": "Jagarico salad x2",
+          "expected": 300,
+          "got": 300,
+          "line": "ジガーリコ サラダ",
+          "share": 300,
+          "ok": true,
+          "why": "Matches Jagarico Salad (qty 2)"
+        }
+      ],
+      "read": {
+        "currency": "JPY",
+        "lines": [
+          {
+            "n": 1,
+            "text": "ロイズ 生チョコレート オーレ",
+            "qty": 1,
+            "price": 800
+          },
+          {
+            "n": 2,
+            "text": "白い恋人 12枚",
+            "qty": 1,
+            "price": 1100
+          },
+          {
+            "n": 3,
+            "text": "ジガーリコ サラダ",
+            "qty": 2,
+            "price": 300
+          }
+        ],
+        "tax": {
+          "included": true,
+          "amount": 176
+        },
+        "total": 2376,
+        "tax_free": false,
+        "matches": [
+          {
+            "request_id": "r1",
+            "line_n": 1,
+            "confidence": 1,
+            "why": "Matches Royce Nama Chocolate"
+          },
+          {
+            "request_id": "r2",
+            "line_n": 2,
+            "confidence": 1,
+            "why": "Matches Shiroi Koibito 12 pieces"
+          },
+          {
+            "request_id": "r3",
+            "line_n": 3,
+            "confidence": 1,
+            "why": "Matches Jagarico Salad (qty 2)"
+          }
+        ],
+        "rawLines": [
+          {
+            "n": 1,
+            "text": "ロイズ 生チョコレート オーレ",
+            "qty": 1,
+            "price": 800
+          },
+          {
+            "n": 2,
+            "text": "白い恋人 12枚",
+            "qty": 1,
+            "price": 1100
+          },
+          {
+            "n": 3,
+            "text": "ジガーリコ サラダ",
+            "qty": 2,
+            "price": 300
+          }
+        ]
+      }
     },
     {
       "case": "s5-indonesia-watsons.json",
       "model": "@cf/google/gemma-4-26b-a4b-it",
-      "ms": 27137,
+      "ms": 13198,
       "rows": [
         {
           "id": "r1",
@@ -501,7 +603,7 @@
           "line": null,
           "share": null,
           "ok": true,
-          "why": "Item not found on receipt"
+          "why": "Emina face wash not found on receipt"
         }
       ],
       "read": {
@@ -564,7 +666,7 @@
             "request_id": "r4",
             "line_n": null,
             "confidence": 0,
-            "why": "Item not found on receipt"
+            "why": "Emina face wash not found on receipt"
           }
         ],
         "rawLines": [

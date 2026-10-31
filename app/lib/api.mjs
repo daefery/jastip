@@ -99,7 +99,11 @@ export function makeApi(db, { saveImage } = {}) {
     if (!ai.aiReady()) throw new Rule("AI is not configured on this server", 503);
     let read;
     try { read = await ai.readReceipt(b.image, reqs); }
-    catch (e) { await T.log(t.id, null, "ai", "Receipt read failed", e.message, 0); throw new Rule("Couldn't read that photo. Try again in better light.", 422); }
+    catch (e) {
+      await T.log(t.id, null, "ai", "Receipt read failed", e.message.slice(0, 280), 0);
+      if (e instanceof ai.AiBusy) throw new Rule("The receipt reader has hit today's limit. Try again in a few hours; your holds stay in place.", 503);
+      throw new Rule("Couldn't read that photo. Try again, with the whole receipt flat and in good light.", 422);
+    }
     const lines = ai.foldDiscounts(read.lines).map((l) => ({ n: l.n, text: String(l.text).slice(0, 80), price: toMinor(l.price, t.currency), disc: !!l.disc }));
     const rid = id(10);
     const image = saveImage ? await saveImage(rid, b.image) : null;
