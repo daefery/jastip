@@ -56,6 +56,7 @@ function friendStatus(sum, t) {
   if (sum.toHold && t.status === "holds") return ["Approve hold", "orange"];
   if (sum.toConfirm) return ["Got it?", "orange"];
   if (t.status === "settled" || t.status === "settling") return sum.charged ? ["Paid", "green"] : sum.released ? ["Released", "gray"] : ["Not included", "gray"];
+  if (sum.released && sum.released + sum.out === sum.count) return ["Released", "gray"]; // e.g. withdrawn while PayPal approved
   if (sum.out === sum.count) return ["Not included", "gray"];
   if (t.status === "shopping") return ["Shopping", "orange"];
   if (sum.held) return ["Held", "blue"];

@@ -391,4 +391,29 @@ async function shopping(names) {
   ok(b.status === "releasing" && t8.status === "settling", "late void saved during completion: trip stays settling", `${t8.status} ${b.status}`);
   failVoid.clear();
 }
+
+// 22. failing release of B never blocks buying A (round 6 #35)
+{
+  const s9 = await setup([["Ayu", 1500], ["Ben", 500]]);
+  for (const p of s9.people) await T.decide(await tripOf(s9.tid), s9.dina, p.r.id, true);
+  await T.setShopDay(await tripOf(s9.tid), s9.dina, "Mon");
+  await hold(s9.tid, s9.people[0]);
+  await T.startHold(await tripOf(s9.tid), s9.people[1].f, s9.people[1].r.id, "http://x");
+  let release; authGate = new Promise((r) => (release = r)); sameAuth = true;
+  const order = (await T.request(s9.people[1].r.id)).order_id; failVoid.add(`AUTH-${order}`);
+  const p9 = T.finishHold(s9.people[1].r.id).catch((x) => x);
+  await new Promise((r) => setTimeout(r, 20));
+  await T.withdraw(await tripOf(s9.tid), s9.people[1].f, s9.people[1].r.id);
+  release(); authGate = null; await p9; sameAuth = false;
+  for (let i = 0; i < 2; i++) { const o = await T.retry(await tripOf(s9.tid), s9.dina); ok(o[0]?.error, `retry ${i + 1} fails again (PayPal still down)`); }
+  await T.startShopping(await tripOf(s9.tid), s9.dina);
+  await T.mark(await tripOf(s9.tid), s9.dina, s9.people[0].r.id, "found");
+  const t9 = await tripOf(s9.tid);
+  const read = { lines: [{ n: 1, text: "KitKat", price: 800 }], matches: [{ request_id: s9.people[0].r.id, line_n: 1 }] };
+  await T.settle(t9, s9.dina, await T.planSettlement(t9, read), "RC10", t9.rev);
+  const a = await T.request(s9.people[0].r.id), b = await T.request(s9.people[1].r.id);
+  ok(a.charged === 900 && b.status === "releasing" && b.plan_op === "void" && (await tripOf(s9.tid)).status === "settling", "checkout charges A exactly, B's release stays open, trip settling");
+  failVoid.clear(); await T.retry(await tripOf(s9.tid), s9.dina);
+  ok((await T.request(s9.people[1].r.id)).status === "released" && (await tripOf(s9.tid)).status === "settled" && (await T.request(s9.people[0].r.id)).charged === 900, "B released later, A unchanged, trip settled");
+}
 console.log(`\n${res.filter(Boolean).length}/${res.length} passed`); process.exit(res.every(Boolean) ? 0 : 1);

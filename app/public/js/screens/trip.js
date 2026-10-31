@@ -36,6 +36,7 @@ const titleOf = (r) => (r.swap_title && ["swapped", "settled", "delivered"].incl
 /* ---------------- friend: the order ---------------- */
 function stageOf(r, t) {
   if (r.status === "delivered") return 5;
+  if (/withdrawn/.test(r.plan_why || "")) return 0;
   if (r.plan_op) return 3;
   if (r.status === "dropped" || r.status === "declined") return 0;
   if (r.status === "settled" || r.status === "released" || (t.status === "settled" && r.status === "not_found")) return 3;
@@ -81,7 +82,7 @@ function friendState(r, t, owner) {
       Object.assign(S, { scene: "paid", eta: `${o} lands ${new Date(t.ret + "T00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}`, title: `Paid ${fmt(r.charged, cur)}. Exactly.`, sub: `The receipt line plus ${o}'s fee. ${fmt(hold - r.charged, cur)} of your hold was never taken.`,
         act: `<button class="btn green" data-got>${ic("box")}I got my item</button>`, money: { value: r.charged, note: `paid · ${fmt(hold - r.charged, cur)} never taken`, fill: pct, color: "var(--green)", rest: true } });
       break; }
-    case "released": Object.assign(S, { scene: "released", eta: "Settled", title: "Not found. Nothing paid.", sub: r.hold ? `Your ${fmt(r.hold, cur)} hold was released.` : "Nothing was held or charged.", money: { value: 0, note: r.hold ? `${fmt(r.hold, cur)} released` : "nothing held", fill: 0 } }); break;
+    case "released": Object.assign(S, { scene: "released", eta: "Settled", title: withdrawnLate ? "Ask withdrawn. Hold released." : /shopping started/.test(r.plan_why || "") ? "Approved too late. Hold released." : "Not found. Nothing paid.", sub: r.hold ? `Your ${fmt(r.hold, cur)} hold was released.` : "Nothing was held or charged.", money: { value: 0, note: r.hold ? `${fmt(r.hold, cur)} released` : "nothing held", fill: 0 } }); break;
     case "delivered": {
       const pct = Math.round((r.charged / hold) * 100);
       Object.assign(S, { scene: "delivered", eta: `Delivered ${r.delivered_at ? when(r.delivered_at) : ""}`, title: "Delivered. Enjoy!", sub: `Thanks for using Jastip with ${o}.`, money: { value: r.charged, note: `paid · ${fmt(hold - r.charged, cur)} never taken`, fill: pct, color: "var(--green)", rest: true } });
@@ -103,7 +104,7 @@ function order({ app, v, cur, reload }, rid) {
   const timeline = tl([
     ["Asked", when(r.created_at), true],
     [`Hold approved · ${fmt(hold, cur)}`, r.authorized_at ? when(r.authorized_at) : "", !!r.authorized_at, "pp"],
-    [`${esc(o.name)} shopping`, t.shop_day || "", n >= 2],
+    [`${esc(o.name)} shopping`, t.shop_day || "", n >= 2 && ["shopping", "settling", "settled"].includes(t.status)],
     r.status === "dropped" || r.status === "declined" ? ["Not included · nothing held", "", true, "dim"] :
     r.status === "released" || r.status === "not_found" ? [neverHeld ? "Nothing held" : `Released · ${fmt(hold, cur)}`, "", r.status === "released", "dim"] : [`Paid ${r.charged ? fmt(r.charged, cur) : ""}${r.charged ? ` · ${fmt(hold - r.charged, cur)} released` : ""}`, r.captured_at ? when(r.captured_at) : "", !!r.captured_at, "ok"],
     ["Delivered", r.delivered_at ? when(r.delivered_at) : "", r.status === "delivered"],
@@ -246,11 +247,17 @@ function courier({ app, v, cur, reload }, openShare) {
     sub = "Exact receipt lines + your fee. Holds not used were released.";
     action = paid.some((r) => r.status === "settled") ? `<button class="btn dark" data-qr>${ic("qr")}Show handover code</button>` : "";
   }
-  if (pending.length || t.status === "settling") {
+  // Recovery sits next to the normal next step, never in place of it: a release PayPal hasn't confirmed
+  // for one friend must not block buying another friend's item.
+  const retryBtn = (main) => `<button class="btn ${main ? "dark" : "light"}" data-retry>${ic("lock")}Retry PayPal${pending.length ? ` · ${pending.length}` : ""}</button>`;
+  if (t.status === "settling" || (t.status === "settled" && pending.length)) {
     eta = "PayPal pending";
     title = `${pending.length} PayPal step${pending.length === 1 ? "" : "s"} not confirmed`;
     sub = "PayPal hasn't confirmed these yet. Retry: each one repeats the same step with the same amount, and PayPal never runs it twice.";
-    action = `<button class="btn dark" data-retry>${ic("lock")}Retry PayPal</button>`;
+    action = retryBtn(true);
+  } else if (pending.length) {
+    eta = `${eta} · PayPal pending`;
+    action = action ? `${action}${retryBtn(false)}` : retryBtn(true);
   }
 
   const pendingRow = (r) => `<span class="rt num" style="color:var(--orange)">${r.plan_op === "capture" ? fmt(r.plan_charge, cur) : fmt(0, cur)}<small>${r.plan_op === "capture" ? "charge awaiting PayPal" : `release of ${fmt(r.hold, cur)} awaiting PayPal`}</small></span>`;

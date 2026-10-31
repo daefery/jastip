@@ -170,6 +170,29 @@ await bima.p.unroute("**/api/join/nope");
   ok(/charge pending/.test(home4) && !/held/.test(home4), "friend home: unconfirmed capture reads 'charge pending', not 'held'", home4.replace(/\n/g, " | "));
 }
 
+// 35. one friend's unconfirmed release never blocks another friend's shopping or checkout
+for (const vp of [{ width: 320, height: 640 }, { width: 768, height: 1024 }, { width: 1440, height: 900 }]) {
+  const { DatabaseSync } = await import("node:sqlite");
+  const d5 = await person("Dina5", vp), a5 = await person("Aya"), b5 = await person("Ben");
+  const t5 = (await d5.call("/api/trips", { home_code: "CGK", city_code: "HND", depart: d(1), ret: d(5), fee: 100 })).trip;
+  const inv5 = (await d5.call(`/api/trips/${t5.id}`)).trip.invite;
+  const ra = (await a5.call(`/api/join/${inv5}/requests`, { title: "Matcha KitKat", cap: 1500 })).request;
+  const rb = (await b5.call(`/api/join/${inv5}/requests`, { title: "Pocky", cap: 500 })).request;
+  for (const r of [ra, rb]) await d5.call(`/api/requests/${r.id}/decide`, { accept: true });
+  await d5.call(`/api/trips/${t5.id}/day`, { day: "Mon" });
+  await approve(a5, ra.id);
+  const db = new DatabaseSync(process.env.DB_FILE || "/tmp/jastip-fake-5181.db");
+  db.prepare("UPDATE requests SET status='releasing', auth_id='FAKE-AUTH-b', hold=600, plan_op='void', plan_charge=0, plan_why='withdrawn while PayPal was approving' WHERE id=?").run(rb.id);
+  db.close();
+  await d5.p.goto(`/#/trip/${t5.id}`); await d5.p.reload(); await d5.p.waitForSelector(".trk");
+  const vis = (sel) => d5.p.locator(sel).locator("visible=true").count();
+  const w = vp.width;
+  ok(await vis("[data-shop]:not([disabled])") === 1 && await vis("[data-retry]") === 1, `${w}px holds: Start shopping and Retry both there`);
+  await d5.p.locator("[data-shop]").locator("visible=true").first().click(); await d5.p.waitForTimeout(800);
+  await d5.call(`/api/requests/${ra.id}/mark`, { what: "found" }); await d5.p.reload(); await d5.p.waitForSelector(".trk");
+  ok(await vis("[data-receipt]:not([disabled])") === 1 && await vis("[data-retry]") === 1, `${w}px shopping: receipt checkout and Retry both there`);
+}
+
 // 3. a stranger cannot open the trip
 const zed = await person("Zed");
 ok((await zed.call(`/api/trips/${trip.id}`)).status === 404, "stranger gets 404 on the trip");
