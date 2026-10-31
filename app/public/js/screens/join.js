@@ -4,10 +4,12 @@ import { topbar, store, refreshMe, owns } from "../app.js";
 import { sceneHTML, skyOf } from "../scenes.js";
 import { fmt, toMinor, step, CUR } from "../money.js";
 
-export async function joinView(app, code, route) {
+export async function joinView(app, code, route = store.route) {
+  // every await below re-checks that this page still owns the screen before painting
+  const mine = () => owns(route);
   let info;
-  try { info = await api(`/api/join/${code}`); if (route != null && !owns(route)) return; }
-  catch (e) { app.innerHTML = `${topbar()}<main class="page"><div class="empty card"><b>This link doesn't work</b><span>${esc(e.message)}. Ask your friend for a new one.</span><a class="btn dark" href="#/" style="max-width:240px">Go home</a></div></main>`; return; }
+  try { info = await api(`/api/join/${code}`); if (!mine()) return; }
+  catch (e) { if (!mine()) return; app.innerHTML = `${topbar()}<main class="page"><div class="empty card"><b>This link doesn't work</b><span>${esc(e.message)}. Ask your friend for a new one.</span><a class="btn dark" href="#/" style="max-width:240px">Go home</a></div></main>`; return; }
   const { trip: t, owner } = info;
   const unit = step(t.currency), dec = CUR[t.currency].d;
   const open = t.status === "open" || t.status === "holds";
@@ -18,7 +20,7 @@ export async function joinView(app, code, route) {
     app.innerHTML = `${topbar()}<main class="page"><div class="form">${host}
       <h1 class="h1">Want something from ${esc(t.city)}?</h1><p class="lead">Ask ${esc(owner.name)}. You pay the exact receipt price, only if it's found.</p>
       <form id="hi"><label class="field"><span>Your first name</span><input class="input" id="name" autocomplete="given-name" maxlength="24" required></label><button class="btn dark">Continue</button></form></div></main>`;
-    app.querySelector("#hi").onsubmit = async (e) => { e.preventDefault(); const n = app.querySelector("#name").value.trim(); if (!n) return; await api("/api/me", { body: { name: n } }); await refreshMe(); joinView(app, code); };
+    app.querySelector("#hi").onsubmit = async (e) => { e.preventDefault(); const n = app.querySelector("#name").value.trim(); if (!n) return; await api("/api/me", { body: { name: n } }); await refreshMe(); if (mine()) joinView(app, code, route); };
     return;
   }
   if (!open) {
@@ -69,11 +71,12 @@ export async function joinView(app, code, route) {
       busy(btn, true);
       try {
         const r = await api("/api/ai/item", { body: { text: src.value, currency: t.currency, city: t.city } });
+        if (!mine()) return;
         Object.assign(st, { source: src.value, title: r.title || src.value.slice(0, 40), detail: r.detail || "", art: cat(r.art), typical: r.typical ? toMinor(r.typical, t.currency) : 0, found: true, ai: r.ai });
         st.cap = st.typical ? Math.max(unit, Math.ceil((st.typical * 1.25) / unit) * unit) : unit * 10;
         draw();
         app.querySelector("#ti")?.focus({ preventScroll: true });
-      } catch (e) { busy(btn, false); toast(e.message, "err"); }
+      } catch (e) { if (!mine()) return; busy(btn, false); toast(e.message, "err"); }
     };
     app.querySelector("#find").onclick = (e) => find(e.currentTarget);
     src.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); find(app.querySelector("#find")); } };
@@ -90,8 +93,8 @@ export async function joinView(app, code, route) {
       try {
         await api(`/api/join/${code}/requests`, { body: { title: st.title, detail: st.detail, source: st.source, art: st.art, rule: st.rule, cap: st.cap / 10 ** dec, typical: st.typical ? st.typical / 10 ** dec : 0 } });
         toast(`Sent to ${owner.name}`);
-        location.hash = `#/trip/${t.id}`;
-      } catch (e) { busy(btn, false); toast(e.message, "err"); }
+        if (mine()) location.hash = `#/trip/${t.id}`;
+      } catch (e) { if (!mine()) return; busy(btn, false); toast(e.message, "err"); }
     };
     app.querySelectorAll("#send,#send2").forEach((b) => b.onclick = () => send(b));
   };

@@ -43,12 +43,15 @@ export function receiptFlow(v, done) {
     box.querySelector("#rx-go").onclick = async (e) => {
       busy(e.currentTarget, true, "Talking to PayPal");
       try {
-        const out = await api(`/api/trips/${t.id}/settle`, { body: { receipt: r.receipt } });
+        const out = await api(`/api/trips/${t.id}/settle`, { body: { receipt: r.receipt, rev: r.rev } });
         const bad = out.results.filter((x) => x.error);
         s.close();
-        toast(bad.length ? `${bad.length} PayPal step${bad.length > 1 ? "s" : ""} didn't go through. Retry from the trip.` : "Charged exactly. Holds released.", bad.length ? "err" : "ok");
+        toast(bad.length ? `PayPal hasn't confirmed ${bad.length} step${bad.length > 1 ? "s" : ""}. Retry from the trip.` : "Charged exactly. Holds released.", bad.length ? "err" : "ok");
         done();
-      } catch (er) { busy(e.currentTarget, false); toast(er.message, "err"); }
+      } catch (er) {
+        busy(e.currentTarget, false); toast(er.message, "err");
+        if (/changed/.test(er.message)) { s.close(); done(); } // list changed: show the fresh trip, scan again
+      }
     };
   };
 

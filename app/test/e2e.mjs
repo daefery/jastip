@@ -127,11 +127,11 @@ ok(plan[a.id]?.charge === 1188 + 100, "Ayu: ¥1,188 line + ¥100 fee", JSON.stri
 ok(plan[b.id]?.charge === 648 + 100, "Bima: swap ¥648 + ¥100 fee", JSON.stringify(plan[b.id]));
 ok(plan[c.id]?.charge === 968 + 100, "Citra: ¥968 + ¥100", JSON.stringify(plan[c.id]));
 ok(plan[c2.id]?.charge === 0, "Citra's patches not found: release");
-const friendSettle = await ayu.call(`/api/trips/${trip.id}/settle`, { receipt: rc.receipt });
+const friendSettle = await ayu.call(`/api/trips/${trip.id}/settle`, { receipt: rc.receipt, rev: rc.rev });
 ok(friendSettle.status === 403, "a friend can't trigger the charges");
-const settled = await dina.call(`/api/trips/${trip.id}/settle`, { receipt: rc.receipt });
+const settled = await dina.call(`/api/trips/${trip.id}/settle`, { receipt: rc.receipt, rev: rc.rev });
 ok(settled.results?.filter((x) => x.charged).length === 3 && settled.results.filter((x) => x.released).length === 1, "PayPal: 3 CAPTURED exact, 1 VOIDED", JSON.stringify(settled.results));
-const again = await dina.call(`/api/trips/${trip.id}/settle`, { receipt: rc.receipt });
+const again = await dina.call(`/api/trips/${trip.id}/settle`, { receipt: rc.receipt, rev: rc.rev });
 ok(again.status === 409 && !again.results, "S7 settling twice charges nobody twice", again.error);
 
 const fin = await ayu.call(`/api/trips/${trip.id}`);

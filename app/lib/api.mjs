@@ -104,10 +104,11 @@ export function makeApi(db, { saveImage } = {}) {
     const image = saveImage ? await saveImage(rid, b.image) : null;
     await T.saveReceipt({ id: rid, trip_id: t.id, image, model: read.model, shop: String(read.shop || "").slice(0, 60), total: toMinor(read.total || 0, t.currency), lines: JSON.stringify(lines), matches: JSON.stringify(read.matches || []) });
     await T.log(t.id, null, "ai", "Receipt read", `${lines.length} lines · ${read.model}`);
-    const plan = await T.planSettlement(t, { lines, matches: read.matches });
+    const t2 = await T.trip(t.id); // the revision this plan is built from; settle must match it
+    const plan = await T.planSettlement(t2, { lines, matches: read.matches });
     const names = new Map();
     for (const x of plan) if (!names.has(x.r.friend_id)) names.set(x.r.friend_id, (await T.user(x.r.friend_id)).name);
-    return { receipt: rid, shop: read.shop, lines, plan: plan.map((x) => ({ id: x.r.id, charge: x.charge, line: x.line, why: x.why, over: x.over, hold: x.r.hold, title: x.r.swap_title || x.r.title, friend: names.get(x.r.friend_id) })) };
+    return { receipt: rid, rev: t2.rev, shop: read.shop, lines, plan: plan.map((x) => ({ id: x.r.id, charge: x.charge, line: x.line, why: x.why, over: x.over, hold: x.r.hold, title: x.r.swap_title || x.r.title, friend: names.get(x.r.friend_id) })) };
   });
   on("POST", "/api/trips/:tid/finish", async (req, p) => ({ results: await T.finishEmpty(await needTrip(p.tid), await needMe(req)) }));
   on("POST", "/api/trips/:tid/retry", async (req, p) => ({ results: await T.retry(await needTrip(p.tid), await needMe(req)) }));
@@ -115,8 +116,9 @@ export function makeApi(db, { saveImage } = {}) {
     const t = await needTrip(p.tid); const u = await needMe(req); const b = await body(req);
     const rc = await T.receipt(b.receipt, t.id);
     if (!rc) throw new Rule("Scan the receipt first", 400);
+    if (!Number.isInteger(b.rev)) throw new Rule("Review the charges first", 400);
     const plan = await T.planSettlement(t, { lines: JSON.parse(rc.lines), matches: JSON.parse(rc.matches) });
-    return { results: await T.settle(t, u, plan, rc.id) };
+    return { results: await T.settle(t, u, plan, rc.id, b.rev) };
   });
 
   async function paypalReturn(url) {

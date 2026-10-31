@@ -267,4 +267,79 @@ async function shopping(names) {
   failVoid.clear(); await T.retry(await tripOf(tid), dina);
   ok((await T.request(people[1].r.id)).status === "released", "then the retry releases it");
 }
+
+// 16. withdraw while PayPal is authorizing: the authorization is kept and released (round 4 #26)
+{
+  const s4 = await setup([["Ayu", 1200]]);
+  await T.decide(await tripOf(s4.tid), s4.dina, s4.people[0].r.id, true);
+  await T.setShopDay(await tripOf(s4.tid), s4.dina, "Mon");
+  await T.startHold(await tripOf(s4.tid), s4.people[0].f, s4.people[0].r.id, "http://x");
+  let release; authGate = new Promise((r) => (release = r)); sameAuth = true; voided.length = 0;
+  const order = (await T.request(s4.people[0].r.id)).order_id;
+  const pending = T.finishHold(s4.people[0].r.id).catch((x) => x);
+  await new Promise((r) => setTimeout(r, 20));
+  await T.withdraw(await tripOf(s4.tid), s4.people[0].f, s4.people[0].r.id);
+  release(); authGate = null;
+  const e = await pending; sameAuth = false;
+  const r = await T.request(s4.people[0].r.id);
+  ok(r && r.status === "released" && voided.includes(`AUTH-${order}`) && /released/.test(e?.message), "withdraw during authorization: auth recorded, then voided", `${r?.status} · ${e?.message}`);
+  const v = await T.view(await tripOf(s4.tid), s4.dina);
+  ok(!v.requests.some((x) => x.id === s4.people[0].r.id && x.status === "withdrawn"), "withdrawn asks never reach the screen");
+}
+// 17. late void saved, then the log write fails: still recoverable, trip reopened (round 4 #27)
+{
+  const s5 = await setup([["Ayu", 1200], ["Late", 900]]);
+  for (const p of s5.people) await T.decide(await tripOf(s5.tid), s5.dina, p.r.id, true);
+  await T.setShopDay(await tripOf(s5.tid), s5.dina, "Mon");
+  await hold(s5.tid, s5.people[0]);
+  await T.startHold(await tripOf(s5.tid), s5.people[1].f, s5.people[1].r.id, "http://x");
+  let release; authGate = new Promise((r) => (release = r)); sameAuth = true;
+  const order = (await T.request(s5.people[1].r.id)).order_id;
+  const pending = T.finishHold(s5.people[1].r.id).catch((x) => x);
+  await new Promise((r) => setTimeout(r, 20));
+  await T.startShopping(await tripOf(s5.tid), s5.dina);
+  await T.mark(await tripOf(s5.tid), s5.dina, s5.people[0].r.id, "not_found");
+  await T.finishEmpty(await tripOf(s5.tid), s5.dina);
+  ok((await tripOf(s5.tid)).status === "settled", "trip finished while the late approval was in flight");
+  // break the events table and the void, so the step is saved but nothing after it works
+  const realRun = db.run; db.run = async (sql, ...a) => { if (/INSERT INTO events/.test(sql)) throw new Error("disk full"); return realRun(sql, ...a); };
+  failVoid.add(`AUTH-${order}`);
+  release(); authGate = null;
+  const e = await pending; sameAuth = false; db.run = realRun;
+  const r = await T.request(s5.people[1].r.id), t5 = await tripOf(s5.tid);
+  ok(r.status === "releasing" && r.auth_id === `AUTH-${order}` && r.plan_op === "void" && t5.status === "settling", "late void saved and trip reopened even when logging fails", `${r.status} ${t5.status} ${e?.message}`);
+  failVoid.clear();
+  await T.retry(await tripOf(s5.tid), s5.dina);
+  ok((await T.request(s5.people[1].r.id)).status === "released" && (await tripOf(s5.tid)).status === "settled", "retry releases it and settles the trip");
+}
+// 18. a hold being released still counts toward the $50 new-friend limit (round 4 #28)
+{
+  const s6 = await setup([["Nia", 7000]]);
+  await T.decide(await tripOf(s6.tid), s6.dina, s6.people[0].r.id, true);
+  await T.setShopDay(await tripOf(s6.tid), s6.dina, "Mon");
+  await hold(s6.tid, s6.people[0]);
+  await T.startShopping(await tripOf(s6.tid), s6.dina);
+  await T.mark(await tripOf(s6.tid), s6.dina, s6.people[0].r.id, "not_found");
+  failVoid.add((await T.request(s6.people[0].r.id)).auth_id);
+  await T.finishEmpty(await tripOf(s6.tid), s6.dina);
+  const d2 = await T.createUser("Dina2");
+  const t2 = await T.createTrip(d2, { home: "J", home_code: "CGK", city: "T", city_code: "HND", currency: "JPY", depart: d(1), ret: d(5), fee: 100 });
+  const r2 = await T.addRequest(await tripOf(t2.id), s6.people[0].f, { title: "Second", cap: 7000 });
+  await T.decide(await tripOf(t2.id), d2, r2.id, true); await T.setShopDay(await tripOf(t2.id), d2, "Mon");
+  let e; try { await T.startHold(await tripOf(t2.id), s6.people[0].f, r2.id, "http://x"); } catch (x) { e = x; }
+  ok(e && /\$50/.test(e.message), "pending release still counts toward the $50 limit", e?.message);
+  failVoid.clear();
+}
+// 19. plan made before a list change can't be charged (round 4 #30)
+{
+  const { dina, tid, people } = await shopping([["Ayu", 1500], ["Bima", 1500]]);
+  await T.mark(await tripOf(tid), dina, people[0].r.id, "found");
+  const snap = await tripOf(tid);
+  const read = { lines: [{ n: 1, text: "Original", price: 800 }], matches: [{ request_id: people[0].r.id, line_n: 1 }] };
+  const plan = await T.planSettlement(snap, read);
+  await T.mark(await tripOf(tid), dina, people[0].r.id, "swap", { title: "Replacement", price: 500 });
+  let e; try { await T.settle(snap, dina, plan, "RC9", snap.rev); } catch (x) { e = x; }
+  const a = await T.request(people[0].r.id);
+  ok(e && /changed/.test(e.message) && (await tripOf(tid)).status === "shopping" && !a.plan_op && !a.charged, "list changed after the receipt: nothing saved, nothing charged", e?.message);
+}
 console.log(`\n${res.filter(Boolean).length}/${res.length} passed`); process.exit(res.every(Boolean) ? 0 : 1);

@@ -3,7 +3,7 @@
 import { api, ic, esc, av, toast, busy, sheet, pic, qrSvg, dateRange, when } from "../ui.js";
 import { topbar, store, owns } from "../app.js";
 import { sceneHTML, skyOf } from "../scenes.js";
-import { fmt } from "../money.js";
+import { fmt, OUTSTANDING } from "../money.js";
 import { receiptFlow } from "./receipt.js";
 
 const STEPS = ["Asked", "Held", "Shopping", "Paid", "Delivered"];
@@ -49,11 +49,11 @@ function friendState(r, t, owner) {
   const S = { scene: "asked", eta: dateRange(t), title: "", sub: "", act: "", needs: "", money: null };
   const unconfirmed = r.plan_op && ["held", "found", "swap_asked", "swapped", "not_found", "releasing"].includes(r.status);
   if (unconfirmed && r.plan_op === "capture") return Object.assign(S, { scene: "paid", eta: "Paying", title: `Charging ${fmt(r.plan_charge, cur)}`,
-    sub: `The receipt line plus ${o}'s fee. PayPal hasn't confirmed it yet, so this may take a moment. It never goes above your ${fmt(hold, cur)} hold.`,
-    money: { value: r.plan_charge, note: `being charged · ${fmt(hold - r.plan_charge, cur)} will be released`, fill: Math.round((r.plan_charge / hold) * 100), color: "#9be2bd", rest: true } });
+    sub: `The receipt line plus ${o}'s fee. PayPal hasn't confirmed the charge yet; ${o} can retry it from the trip. It can never go above your ${fmt(hold, cur)} hold.`,
+    money: { value: r.plan_charge, note: `charge awaiting PayPal · the rest of your hold is not taken`, fill: Math.round((r.plan_charge / hold) * 100), color: "#9be2bd", rest: true } });
   if (unconfirmed) return Object.assign(S, { scene: "released", eta: "Releasing", title: r.status === "releasing" ? "Approved too late" : "Not bought. Releasing your hold.",
-    sub: `${r.status === "releasing" ? `${o} had already started shopping. ` : ""}Nothing will be charged. PayPal hasn't confirmed the release yet; it's retried automatically.`,
-    money: { value: 0, note: `${fmt(hold, cur)} being released`, fill: 100, color: "#c7c7cc" } });
+    sub: `${r.status === "releasing" ? `${o} had already started shopping. ` : ""}Nothing will be charged. PayPal hasn't confirmed the release yet; ${o} can retry it from the trip.`,
+    money: { value: 0, note: `release of ${fmt(hold, cur)} awaiting PayPal`, fill: 100, color: "#c7c7cc" } });
   switch (r.status) {
     case "asked": Object.assign(S, { title: `Waiting for ${o}`, sub: `${o} checks your max price before anyone holds money.`, act: `<button class="btn red" data-withdraw>${ic("trash")}Withdraw ask</button>` }); break;
     case "declined": Object.assign(S, { title: `${o} can't take this one`, sub: "Nothing was held or charged.", scene: "released" }); break;
@@ -228,9 +228,9 @@ function courier({ app, v, cur, reload }, openShare) {
     action = `<button class="btn dark" data-shop ${held.length ? "" : "disabled"}>${ic("bag")}Start shopping${held.length ? ` · ${held.length}` : ""}</button>`;
   } else if (t.status === "settling") {
     n = 3; scene = "paid"; eta = "Payment problem";
-    const stuck = by("held", "found", "swap_asked", "swapped", "not_found", "releasing");
-    title = `${stuck.length} PayPal step${stuck.length === 1 ? "" : "s"} didn't go through`;
-    sub = "PayPal didn't confirm these. The holds are still in place. Retry, nothing is charged twice.";
+    const stuck = rs.filter((r) => r.plan_op && OUTSTANDING.includes(r.status));
+    title = `${stuck.length} PayPal step${stuck.length === 1 ? "" : "s"} not confirmed`;
+    sub = "PayPal hasn't confirmed these yet. Retry: each one repeats the same step with the same amount, and PayPal never runs it twice.";
     action = `<button class="btn dark" data-retry>${ic("lock")}Retry failed payments</button>`;
   } else if (t.status === "shopping") {
     n = 2; scene = "shopping"; eta = "Shopping now";
@@ -261,7 +261,7 @@ function courier({ app, v, cur, reload }, openShare) {
       + group("Still looking", by("held"), (r) => `<div class="tbtn-row"><button class="tbtn" data-more="${r.id}" aria-label="More for ${esc(r.title)}">${ic("more")}</button><button class="tbtn blue" data-mark="${r.id}" data-w="found" aria-label="Found ${esc(r.title)}">${ic("check")}<span class="lbl">Found</span></button></div>`)
       + group("Not here", by("not_found"), (r) => `<button class="tbtn x" data-mark="${r.id}" data-w="held">Undo</button>`);
   } else if (t.status === "settling") {
-    body = group("Not confirmed yet", by("held", "found", "swap_asked", "swapped", "not_found", "releasing"), (r) => `<span class="rt num" style="color:var(--red)">${r.plan_op === "capture" ? fmt(r.plan_charge, cur) : fmt(0, cur)}<small>${r.plan_op === "capture" ? "to charge" : `release ${fmt(r.hold, cur)}`} · held</small></span>`)
+    body = group("Not confirmed yet", rs.filter((r) => r.plan_op && OUTSTANDING.includes(r.status)), (r) => `<span class="rt num" style="color:var(--orange)">${r.plan_op === "capture" ? fmt(r.plan_charge, cur) : fmt(0, cur)}<small>${r.plan_op === "capture" ? "charge awaiting PayPal" : `release of ${fmt(r.hold, cur)} awaiting PayPal`}</small></span>`)
       + group("Done", [...paid, ...rel], (r) => `<span class="rt num" style="color:${r.charged ? "var(--green)" : "var(--l2)"}">${fmt(r.charged || 0, cur)}<small>${r.charged ? "charged" : "released"}</small></span>`);
   } else {
     body = group("Paid", paid, (r) => `<span class="rt num" style="color:var(--green)">${fmt(r.charged, cur)}<small>${r.status === "delivered" ? "delivered" : "to hand over"}</small></span>`)
@@ -273,7 +273,9 @@ function courier({ app, v, cur, reload }, openShare) {
   const earned = paid.reduce((s, r) => s + r.charged, 0);
   const kpis = t.status === "settled"
     ? `<div class="kpis"><div class="kpi g"><b class="num">${fmt(earned, cur)}</b><span>paid to you</span></div><div class="kpi"><b class="num">${fmt(paid.length * t.fee, cur)}</b><span>your fees</span></div><div class="kpi"><b class="num">${fmt(rel.reduce((s, r) => s + (r.hold || 0), 0), cur)}</b><span>released</span></div></div>`
-    : `<div class="kpis"><div class="kpi b"><b class="num">${fmt(holdSum(live.length ? live : held), cur)}</b><span>held for you</span></div><div class="kpi"><b>${rs.filter((r) => r.status !== "declined").length}</b><span>asks</span></div><div class="kpi"><b>${new Set(rs.map((r) => r.friend.id)).size}</b><span>friends</span></div></div>`;
+    : t.status === "settling"
+    ? `<div class="kpis"><div class="kpi g"><b class="num">${fmt(earned, cur)}</b><span>confirmed paid</span></div><div class="kpi"><b class="num">${fmt(holdSum(rs.filter((r) => r.plan_op && OUTSTANDING.includes(r.status))), cur)}</b><span>authorized, not settled</span></div><div class="kpi"><b class="num">${fmt(rel.reduce((s, r) => s + (r.hold || 0), 0), cur)}</b><span>released</span></div></div>`
+    : `<div class="kpis"><div class="kpi b"><b class="num">${fmt(holdSum(rs.filter((r) => OUTSTANDING.includes(r.status) && r.auth_id !== null)), cur)}</b><span>held for you</span></div><div class="kpi"><b>${rs.filter((r) => r.status !== "declined").length}</b><span>asks</span></div><div class="kpi"><b>${new Set(rs.map((r) => r.friend.id)).size}</b><span>friends</span></div></div>`;
   const activity = tl(activityRows(v.events));
   const friends = [...new Map(rs.map((r) => [r.friend.id, r.friend])).values()];
 
@@ -288,7 +290,7 @@ function courier({ app, v, cur, reload }, openShare) {
     </section>
     ${action ? `<div class="actbar">${action}</div>` : ""}
     <nav class="rail" aria-label="Trip"><div class="card"><div class="me">${av(store.me, 40)}<div><b>${esc(store.me.name)}</b><span>${esc(t.home_code)} → ${esc(t.city_code)} · ${dateRange(t)}</span></div></div>
-      <h3>Friends</h3>${friends.map((f) => { const xs = rs.filter((r) => r.friend.id === f.id); const p = xs.reduce((s, r) => s + (r.charged || 0), 0), h = holdSum(xs.filter((r) => ["held", "found", "swap_asked", "swapped", "not_found"].includes(r.status))); return `<div class="ord">${av(f, 40)}<div><b>${esc(f.name)}</b><span>${xs.length} item${xs.length > 1 ? "s" : ""} · ${p ? fmt(p, cur) + " paid" : h ? fmt(h, cur) + " held" : "asked"}</span></div></div>`; }).join("") || `<p class="hint">No asks yet.</p>`}
+      <h3>Friends</h3>${friends.map((f) => { const xs = rs.filter((r) => r.friend.id === f.id); const p = xs.reduce((s, r) => s + (r.charged || 0), 0), h = holdSum(xs.filter((r) => OUTSTANDING.includes(r.status))); return `<div class="ord">${av(f, 40)}<div><b>${esc(f.name)}</b><span>${xs.length} item${xs.length > 1 ? "s" : ""} · ${[p && fmt(p, cur) + " paid", h && fmt(h, cur) + (xs.some((r) => r.plan_op && OUTSTANDING.includes(r.status)) ? " awaiting PayPal" : " held")].filter(Boolean).join(" · ") || statusWord(xs[0], t).toLowerCase()}</span></div></div>`; }).join("") || `<p class="hint">No asks yet.</p>`}
       <div style="height:8px"></div><button class="btn light sm" data-share style="width:100%">${ic("share")}Share trip link</button>
     </div></nav>
     <aside class="aside" aria-label="Money"><div class="card"><h3>Money · PayPal</h3>${kpis}${v.customs?.usd ? `<p class="hint" style="margin-top:8px">${ic("scale")} Customs: ${v.customs.basis === "receipt" ? "goods" : "up to"} $${v.customs.usd} of $${v.customs.limit} duty-free${v.customs.basis === "receipt" ? " (receipt prices)" : " (friends' max prices)"}</p>` : ""}</div>
@@ -313,7 +315,7 @@ function courier({ app, v, cur, reload }, openShare) {
   const payAct = (b, path, okMsg) => act(b, async () => {
     const o = await api(`/api/trips/${t.id}/${path}`, { body: {} });
     const bad = o.results.filter((x) => x.error).length;
-    if (bad) { toast(`${bad} didn't go through. The hold${bad > 1 ? "s are" : " is"} still in place. Retry in a minute.`, "err"); return; }
+    if (bad) { toast(`PayPal hasn't confirmed ${bad} step${bad > 1 ? "s" : ""}. Retry in a minute.`, "err"); return; }
     toast(okMsg);
   });
   on("[data-finish]", (b) => { if (confirm(`Release every hold? Nothing will be charged.`)) payAct(b, "finish", "All holds released"); });

@@ -121,6 +121,27 @@ const after2 = await dina.p.evaluate(() => [location.hash, !!document.querySelec
 ok(after2[0] === "#/" && !after2[1], "slow route fetch + leaving: the old trip never paints", JSON.stringify(after2));
 await dina.p.unroute("**/api/me");
 
+// 29. join page: slow 404 or slow AI answer after leaving never repaints
+await bima.p.goto(`/#/`); await bima.p.waitForTimeout(400);
+let slowJoin = true;
+await bima.p.route("**/api/join/nope", async (route) => { if (slowJoin) { slowJoin = false; await new Promise((r) => setTimeout(r, 2000)); } await route.continue(); });
+await bima.p.evaluate(() => { location.hash = "#/join/nope"; }); await bima.p.waitForTimeout(200);
+await bima.p.evaluate(() => { location.hash = "#/"; }); await bima.p.waitForTimeout(3500);
+ok(!/doesn't work/.test(await bima.p.locator("main").innerText()), "slow bad-invite answer after leaving: home stays home");
+await bima.p.unroute("**/api/join/nope");
+{
+  const d3 = await person("Dina3");
+  const t3 = (await d3.call("/api/trips", { home_code: "CGK", city_code: "HND", depart: d(1), ret: d(5), fee: 100 })).trip;
+  const inv3 = (await d3.call(`/api/trips/${t3.id}`)).trip.invite;
+  await bima.p.evaluate((c) => { location.hash = `#/join/${c}`; }, inv3); await bima.p.waitForSelector("#src");
+  await bima.p.route("**/api/ai/item", async (route) => { await new Promise((r) => setTimeout(r, 2000)); await route.fulfill({ json: { title: "Pocky", detail: "", art: "snack", typical: 200 } }); });
+  await bima.p.fill("#src", "pocky"); await bima.p.click("#find"); await bima.p.waitForTimeout(200);
+  await bima.p.evaluate(() => { location.hash = "#/"; }); await bima.p.waitForTimeout(3500);
+  const txt = await bima.p.locator("main").innerText();
+  ok(!/should Dina3 bring/.test(txt) && /Trips/.test(txt), "slow AI answer after leaving: home stays home");
+  await bima.p.unroute("**/api/ai/item");
+}
+
 // 3. a stranger cannot open the trip
 const zed = await person("Zed");
 ok((await zed.call(`/api/trips/${trip.id}`)).status === 404, "stranger gets 404 on the trip");

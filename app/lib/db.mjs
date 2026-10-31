@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS trips (
   home TEXT NOT NULL, home_code TEXT NOT NULL, city TEXT NOT NULL, city_code TEXT NOT NULL,
   currency TEXT NOT NULL, depart TEXT NOT NULL, ret TEXT NOT NULL,
   fee INTEGER NOT NULL, payee_email TEXT,
-  shop_day TEXT, status TEXT NOT NULL DEFAULT 'open', receipt_id TEXT, settle_id TEXT,
+  shop_day TEXT, status TEXT NOT NULL DEFAULT 'open', receipt_id TEXT, settle_id TEXT, rev INTEGER NOT NULL DEFAULT 0,
   invite TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS requests (
@@ -65,6 +65,7 @@ export async function nodeSqlite(file) {
   const tcols = db.prepare("PRAGMA table_info(trips)").all().map((c) => c.name);
   if (!tcols.includes("receipt_id")) db.exec("ALTER TABLE trips ADD COLUMN receipt_id TEXT");
   if (!tcols.includes("settle_id")) db.exec("ALTER TABLE trips ADD COLUMN settle_id TEXT");
+  if (!tcols.includes("rev")) db.exec("ALTER TABLE trips ADD COLUMN rev INTEGER NOT NULL DEFAULT 0");
   const norm = (a) => a.map((x) => (x === undefined ? null : x));
   return {
     get: async (sql, ...a) => db.prepare(sql).get(...norm(a)) ?? null,

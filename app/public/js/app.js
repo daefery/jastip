@@ -69,7 +69,7 @@ function home() {
   ];
   const row = ({ t, mine }) => {
     const [label, tone] = mine ? (t.sum.waiting ? [`${t.sum.waiting} new ask${t.sum.waiting > 1 ? "s" : ""}`, "orange"] : ROLE_ST[t.status]) : friendStatus(t.sum, t);
-    const money = mine ? (t.status === "settled" ? `+${fmt(t.sum.charged, t.currency)}` : t.sum.held ? `${fmt(t.sum.held, t.currency)} held` : `${t.sum.count} ask${t.sum.count === 1 ? "" : "s"}`)
+    const money = mine ? (t.status === "settled" ? `+${fmt(t.sum.charged, t.currency)}` : t.status === "settling" ? `${fmt(t.sum.held, t.currency)} awaiting PayPal` : t.sum.held ? `${fmt(t.sum.held, t.currency)} held` : `${t.sum.count} ask${t.sum.count === 1 ? "" : "s"}`)
       : t.sum.charged ? `${fmt(t.sum.charged, t.currency)} paid` : t.sum.held ? `${fmt(t.sum.held, t.currency)} held` : "";
     return `<a class="trip" href="#/trip/${t.id}">
       <span class="route"><small>${esc(t.home_code)}</small>${esc(t.city_code)}</span>

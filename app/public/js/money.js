@@ -34,6 +34,8 @@ export const HOMES = [
   { city: "Medan", code: "KNO" },
 ];
 
+// Request statuses where PayPal may still hold the friend's money (an authorization not yet captured or voided).
+export const OUTSTANDING = ["held", "found", "swap_asked", "swapped", "not_found", "releasing"];
 export const CUSTOMS_USD = 500; // Indonesia: personal goods free of import duty up to USD 500 per arrival (beacukai.go.id)
 export const NEW_FRIEND_USD = 50; // Proposed: total holds allowed before a friend's first completed handover
 
